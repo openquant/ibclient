@@ -83,7 +83,7 @@ public class ApiController implements EWrapper {
 		m_outLogger = outLogger;
 	}
 
-	public void connect( String host, int port, int clientId, String connectionOpts ) {
+	public void connect( String host, int port, int clientId) {
         m_client.eConnect(host, port, clientId);
         sendEOM();
     }
@@ -847,6 +847,7 @@ public class ApiController implements EWrapper {
     	}
     }
 
+    @SuppressWarnings( "deprecation" )
 	@Override public void historicalData(int reqId, String date, double open, double high, double low, double close, int volume, int count, double wap, boolean hasGaps) {
 		IHistoricalDataHandler handler = m_historicalDataMap.get( reqId);
 		if (handler != null) {
