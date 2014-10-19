@@ -269,7 +269,7 @@ public class AdvisorUtil {
 		System.out.println( "error " + line);
 	}
 
-
+    /*
 	public static void main(String[] args) {
 		String str1 = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<ListOfGroups>\n	<Group>\n		<name>Group 1</name>\n		<ListOfAccts varName=\"list\">\n			<String>DU109949</String>\n			<String>DU109950</String>\n			<String>DU110a156</String>\n			<String>DU110157</String>\n			<String>DU110158</String>\n		</ListOfAccts>\n		<defaultMethod>AvailableEquity</defaultMethod>\n	</Group>\n	<Group>\n		<name>Group 2</name>\n		<ListOfAccts varName=\"list\">\n			<String>DU109950</String>\n			<String>DU110156</String>\n			<String>DU110157</String>\n		</ListOfAccts>\n		<defaultMethod>AvailableEquity</defaultMethod>\n	</Group>\n</ListOfGroups>\n";
 		ArrayList<Group> groups = getGroups( str1);
@@ -282,6 +282,7 @@ public class AdvisorUtil {
 
 		AdvisorUtil.err( aliases.toString() );
 	}
+	*/
 
 	public static String getGroupsXml(ArrayList<Group> groups) {
 		StringBuilder buf = new StringBuilder();
