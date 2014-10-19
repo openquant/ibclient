@@ -1,0 +1,19 @@
+# Editor backup
+.*.swp
+.*.kate-swp
+*~
+*.tmp
+
+# Idea and sbt artifacts
+/.ensime*
+/.idea
+/.idea_modules
+/target
+/project/project
+/project/target
+
+# Python
+*.pyc
+__pycache__
+
+/*.log
