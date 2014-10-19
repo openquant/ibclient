@@ -10,7 +10,7 @@ object Mode extends Enumeration {
 import Mode._
 
 sealed case class Options(
-  mode: Mode = Mode.Test,
+  mode: Mode = Mode.Invalid,
   quiet: Boolean = false
 )
 
@@ -21,10 +21,12 @@ object Main {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
   private val version = "0.1"
 
-  def main (args: Array[String]) {
-    val optParser = new scopt.OptionParser[Options]("cdtfilter") {
+  def getOptionParser: scopt.OptionParser[Options] = {
+    new scopt.OptionParser[Options]("cdtfilter") {
       head("trabot", Main.version)
+
       override def showUsageOnError: Boolean = true
+
       help("help") text ("print help")
       /*
        * Common arguments
@@ -36,5 +38,47 @@ object Main {
         (_, dest) => dest.copy(mode = Mode.Test)
       }
     }
+  }
+
+  def main(args: Array[String]) {
+    val optionParser = getOptionParser
+    val options: Options = optionParser.parse(args, Options()).getOrElse {
+      log.error("Option syntax incorrect")
+      log.error(s"Arguments given ${args.mkString("'", "' '", "'")}")
+      log.error("Failure.")
+      sys.exit(1)
+    }
+
+    val success: Boolean = try options.mode match {
+      case Mode.Invalid => {
+        optionParser.reportError("Please specify a valid command")
+        optionParser.showUsage
+        false
+      }
+
+      case Mode.Test => {
+        test()
+        true
+      }
+    } catch {
+      case e: Exception => {
+        log.error(s"Exception thrown ${e.getMessage}")
+        false
+      }
+    }
+
+    if (success) {
+      log.info("Success.")
+      log.info("=========== trabot finished successfully ================")
+      sys.exit(0)
+    } else {
+      log.error("Failure.")
+      log.info("=========== trabot finished with errors =================")
+      sys.exit(-1)
+    }
+  }
+
+  def test(): Unit = {
+    println("test")
   }
 }
