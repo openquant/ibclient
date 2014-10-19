@@ -1,6 +1,11 @@
 package com.larroy.trabot
 
+import com.ib.contracts.StkContract
+import com.larroy.trabot.ib.IBClient
 import org.slf4j.{Logger, LoggerFactory}
+
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 
 object Mode extends Enumeration {
@@ -37,8 +42,8 @@ object Main {
       cmd("test") text ("test") action {
         (_, dest) => dest.copy(mode = Mode.Test)
       }
-    }
-  }
+   }
+ }
 
   def main(args: Array[String]) {
     val optionParser = getOptionParser
@@ -63,6 +68,7 @@ object Main {
     } catch {
       case e: Exception => {
         log.error(s"Exception thrown ${e.getMessage}")
+        e.printStackTrace()
         false
       }
     }
@@ -79,6 +85,10 @@ object Main {
   }
 
   def test(): Unit = {
-    println("test")
+    val ibclient = new IBClient("localhost", 7496, 2)
+    val futureContractDetails = ibclient.contractDetails(new StkContract("MSFT"))
+    val cd = Await.result(futureContractDetails, Duration.Inf)
+    println(cd)
+    ibclient.disconnect()
   }
 }

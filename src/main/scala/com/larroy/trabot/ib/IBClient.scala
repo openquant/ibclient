@@ -2,42 +2,43 @@ package com.larroy.trabot.ib
 
 import java.util
 
+import com.ib.client.{ContractDetails, Contract}
+import com.ib.controller.ApiController.IContractDetailsHandler
 import com.ib.controller.{ApiConnection, ApiController}
 
 import org.slf4j.{Logger, LoggerFactory}
+import scala.collection.JavaConversions._
+import scala.concurrent.{Promise, Future}
+
+object APIState extends Enumeration {
+  type APIState = Value
+  val WaitForConnection, Connected, Disconnected= Value
+}
+//import APIState._
 
 /**
  * @author piotr 19.10.14
  */
 class IBClient(val host: String, val port: Int, val clientId: Int) extends ApiController.IConnectionHandler with ApiConnection.ILogger {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
-  var isConnected: Boolean = false
+  var apiState = APIState.WaitForConnection
   val apiController = new ApiController(this, this, this)
   connect()
 
-  def connect(): Unit = {
-    log.info(s"Connecting to $host $port (clientId $clientId)")
-    apiController.connect(host, port, clientId)
-    while (! isConnected) {
-      log.info("Waiting for connection")
-      wait(1000)
-    }
-    log.info("Connected")
-  }
 
   override def log(x: String): Unit = {
-    log.info(x)
+    //log.info(s"log handler $x")
   }
 
   override def connected(): Unit = {
     log.info(s"connected handler")
-    isConnected = true
+    apiState.synchronized(apiState = APIState.Connected)
   }
 
   override def disconnected(): Unit = {
     log.info(s"disconnected handler")
-    isConnected = false
-    connect()
+    apiState.synchronized(apiState = APIState.Disconnected)
+    //connect()
   }
 
   override def error(e: Exception): Unit = {
@@ -54,5 +55,38 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends ApiCo
 
   override def accountList(list: util.ArrayList[String]): Unit = {
     log.info(s"accountList handler")
+  }
+
+
+  /*** IB API ***/
+  def connect(): Unit = {
+    log.info(s"Connecting to $host $port (clientId $clientId)")
+    apiState.synchronized {
+      apiController.connect(host, port, clientId)
+      while (apiState == APIState.WaitForConnection) {
+        log.info("Waiting for connection")
+        apiState.wait(1000)
+      }
+      apiState match {
+        case APIState.Connected =>
+          log.info("Connected")
+        case APIState.Disconnected =>
+          log.info("Connection failed")
+      }
+    }
+  }
+
+  def disconnect(): Unit = {
+    apiController.disconnect()
+  }
+
+  def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = {
+    val result = Promise[Seq[ContractDetails]]()
+    apiController.reqContractDetails(contract, new IContractDetailsHandler {
+      override def contractDetails(list: util.ArrayList[ContractDetails]): Unit = {
+        result.success(list.toVector)
+      }
+    })
+    result.future
   }
 }
