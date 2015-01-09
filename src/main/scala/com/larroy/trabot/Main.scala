@@ -86,9 +86,18 @@ object Main {
 
   def test(): Unit = {
     val ibclient = new IBClient("localhost", 7496, 2)
-    val futureContractDetails = ibclient.contractDetails(new StkContract("MSFT"))
+    val contract = new StkContract("MSFT")
+    val futureContractDetails = ibclient.contractDetails()
     val cd = Await.result(futureContractDetails, Duration.Inf)
     println(cd)
+
+    import com.ib.client.Types._
+    import com.ib.client.Contract
+    println("Req fundamentals")
+    val fundamentalsFut = ibclient.fundamentals(contract , FundamentalType.ReportSnapshot)
+    val fundamentals = Await.result(fundamentalsFut, Duration.Inf)
+    println(fundamentals)
+
     ibclient.disconnect()
   }
 }

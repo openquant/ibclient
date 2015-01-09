@@ -2,8 +2,9 @@ package com.larroy.trabot.ib
 
 import java.util
 
+import com.ib.client.Types.FundamentalType
 import com.ib.client.{ContractDetails, Contract}
-import com.ib.controller.ApiController.IContractDetailsHandler
+import com.ib.controller.ApiController.{IContractDetailsHandler, IFundamentalsHandler}
 import com.ib.controller.{ApiConnection, ApiController}
 
 import org.slf4j.{Logger, LoggerFactory}
@@ -85,6 +86,16 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends ApiCo
     apiController.reqContractDetails(contract, new IContractDetailsHandler {
       override def contractDetails(list: util.ArrayList[ContractDetails]): Unit = {
         result.success(list.toVector)
+      }
+    })
+    result.future
+  }
+
+  def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
+    val result = Promise[String]()
+    apiController.reqFundamentals(contract, typ, new IFundamentalsHandler {
+      override def fundamentals(x: String): Unit = {
+        result.success(x)
       }
     })
     result.future
