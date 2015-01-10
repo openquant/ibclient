@@ -28,7 +28,11 @@ libraryDependencies ++= {
     "commons-codec" % "commons-codec" % "1.9",
     "org.apache.commons" % "commons-lang3" % "3.3.2",
     "com.netaporter" %% "scala-uri" % "0.4.2",
-    "io.argonaut" %% "argonaut" % "6.0.4"
+    "org.json4s" %% "json4s-native" % "3.2.11",
+    "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",
+    "org.scalikejdbc" %% "scalikejdbc" % "2.1.4",
+    "org.xerial" % "sqlite-jdbc" % "3.8.7",
+    "com.github.tototoshi" %% "scala-csv" % "1.1.2"
   )
 }
 

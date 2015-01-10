@@ -10,7 +10,7 @@ import scala.concurrent.duration.Duration
 
 object Mode extends Enumeration {
   type Mode = Value
-  val Invalid, Test  = Value
+  val Invalid, Test, Populate  = Value
 }
 import Mode._
 
@@ -65,6 +65,10 @@ object Main {
         test()
         true
       }
+      case Mode.Populate => {
+        populate(options)
+        true
+      }
     } catch {
       case e: Exception => {
         log.error(s"Exception thrown ${e.getMessage}")
@@ -87,7 +91,7 @@ object Main {
   def test(): Unit = {
     val ibclient = new IBClient("localhost", 7496, 2)
     val contract = new StkContract("MSFT")
-    val futureContractDetails = ibclient.contractDetails()
+    val futureContractDetails = ibclient.contractDetails(contract)
     val cd = Await.result(futureContractDetails, Duration.Inf)
     println(cd)
 
@@ -99,5 +103,9 @@ object Main {
     println(fundamentals)
 
     ibclient.disconnect()
+  }
+
+  def populate(options: Options): Unit = {
+
   }
 }
