@@ -18,7 +18,6 @@ object StockList {
 
   case class StockInfo(ticker: String, name: String, capM: Option[BigDecimal], IPOyear: Option[Int], Sector: String, Industry: String, url: String)
 
-
   def listExchange(exchange: ExchangeType): Vector[StockInfo] = {
     val resPath: String = exchange match {
       case NYSE => "/nyse.csv"
@@ -35,7 +34,8 @@ object StockList {
 
   val capre = """\$(\d+(?:.\d+))([MB])""".r
 
-  def getCap(x: String): Option[BigDecimal] = {
+  /// Capitalization from $13.B or $512.5M or n/a in Millions
+  def getCapMill(x: String): Option[BigDecimal] = {
     x match {
       case capre(dollars, unit) => {
         unit match {
@@ -53,6 +53,6 @@ object StockList {
 
   def parseCSVLine(x: List[String]): StockInfo = {
     val IPOyear = Try(x(4).toInt).toOption
-    new StockInfo(x(0), x(1), getCap(x(3)), IPOyear, x(5), x(6), x(7))
+    new StockInfo(x(0), x(1), getCapMill(x(3)), IPOyear, x(5), x(6), x(7))
   }
 }
