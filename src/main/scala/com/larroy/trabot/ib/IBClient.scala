@@ -2,13 +2,14 @@ package com.larroy.trabot.ib
 
 import java.util
 
-import com.ib.client.Types.FundamentalType
+import com.ib.client.Types._
 import com.ib.client.{ContractDetails, Contract}
-import com.ib.controller.ApiController.{IContractDetailsHandler, IFundamentalsHandler}
-import com.ib.controller.{ApiConnection, ApiController}
+import com.ib.controller.ApiController.{IHistoricalDataHandler, IContractDetailsHandler, IFundamentalsHandler}
+import com.ib.controller.{Bar, ApiConnection, ApiController}
 
 import org.slf4j.{Logger, LoggerFactory}
 import scala.collection.JavaConversions._
+import scala.collection.mutable
 import scala.concurrent.{Promise, Future}
 
 object APIState extends Enumeration {
@@ -96,6 +97,24 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends ApiCo
     apiController.reqFundamentals(contract, typ, new IFundamentalsHandler {
       override def fundamentals(x: String): Unit = {
         result.success(x)
+      }
+    })
+    result.future
+  }
+
+  case class BarGap(bar: Bar, hasGaps: Boolean)
+
+  def historicalData(contract: Contract, endDate: String, duration: Int, durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean): Future[IndexedSeq[BarGap]] = {
+    val result = Promise[IndexedSeq[BarGap]]()
+    apiController.reqHistoricalData(contract, endDate, duration, durationUnit, barSize, whatToShow, rthOnly, new IHistoricalDataHandler {
+      val queue = mutable.Queue[BarGap]()
+      override def historicalDataEnd(): Unit = {
+        log.debug("historicalDataEnd")
+        result.success(queue.toIndexedSeq)
+      }
+      override def historicalData(bar: Bar, hasGaps: Boolean): Unit ={
+        log.debug(s"historicalData ${bar.toString}")
+        queue += new BarGap(bar, hasGaps)
       }
     })
     result.future

@@ -32,7 +32,8 @@ libraryDependencies ++= {
     "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",
     "org.scalikejdbc" %% "scalikejdbc" % "2.1.4",
     "org.xerial" % "sqlite-jdbc" % "3.8.7",
-    "com.github.tototoshi" %% "scala-csv" % "1.1.2"
+    "com.github.tototoshi" %% "scala-csv" % "1.1.2",
+    "io.reactivex" %% "rxscala" % "0.23.1"
   )
 }
 

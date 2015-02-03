@@ -27,7 +27,7 @@ object Main {
   private val version = "0.1"
 
   def getOptionParser: scopt.OptionParser[Options] = {
-    new scopt.OptionParser[Options]("cdtfilter") {
+    new scopt.OptionParser[Options]("trabot") {
       head("trabot", Main.version)
 
       override def showUsageOnError: Boolean = true
@@ -90,17 +90,22 @@ object Main {
 
   def test(): Unit = {
     val ibclient = new IBClient("localhost", 7496, 2)
-    val contract = new StkContract("MSFT")
+    val contract = new StkContract("SPY")
     val futureContractDetails = ibclient.contractDetails(contract)
     val cd = Await.result(futureContractDetails, Duration.Inf)
     println(cd)
 
     import com.ib.client.Types._
     import com.ib.client.Contract
+    /*
     println("Req fundamentals")
-    val fundamentalsFut = ibclient.fundamentals(contract , FundamentalType.ReportSnapshot)
+    val fundamentalsFut = ibclient.fundamentals(contract, FundamentalType.ReportSnapshot)
     val fundamentals = Await.result(fundamentalsFut, Duration.Inf)
     println(fundamentals)
+    */
+    val res = ibclient.historicalData(contract, "20110101 10:00:00", 10, DurationUnit.DAY, BarSize._1_day, WhatToShow.MIDPOINT, false)
+    val hist = Await.result(res, Duration.Inf)
+    println(hist)
 
     ibclient.disconnect()
   }
