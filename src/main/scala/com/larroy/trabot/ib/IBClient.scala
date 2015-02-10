@@ -16,29 +16,36 @@ object APIState extends Enumeration {
 }
 //import APIState._
 
+
+case class HistoricalDataHandler(queue: mutable.Queue[Bar] = mutable.Queue.empty[Bar], promise: Promise[IndexedSeq[Bar]] = Promise[IndexedSeq[Bar]]())
+
 /**
  * @author piotr 19.10.14
  */
 class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrapper {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
   val eclientSocket = new EClientSocket(this)
-  val reqId: Int = 0
+  var reqId: Int = 0
+  var orderId: Int = 0
 
-  val reqMap = mutable.Map.empty[]
+  /**
+   * A map of request id to Promise
+   */
+  val reqPromise = mutable.Map.empty[Int, AnyRef]
 
   def connect(): Unit = {
     eclientSocket.eConnect(host, port, clientId)
   }
 
-  override def nextValidId(orderId: Int): Unit = {
-		orderId = orderId
+  def disconnect(): Unit = {
+    eclientSocket.eDisconnect()
+  }
+
+  override def nextValidId(id: Int): Unit = {
+		orderId = id
 		reqId = orderId + 10000000
     log.info("nextValidId")
 	}
-
-  override def error(e: Exception): Unit = {
-    log.error(s"error handler: ${e.getMessage}")
-  }
 
 	override def error(e: Exception): Unit = {
     log.error(s"error handler: ${e.getMessage}")
@@ -46,69 +53,67 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 	}
 
 	override def error(id: Int, errorCode: Int, errorMsg: String): Unit = {
-
-  }
-
-  override def message(id: Int, errorCode: Int, errorMsg: String): Unit = {
-    log.info(s"message handler id: $id errorCode: $errorCode errorMsg: $errorMsg")
-    if (errorCode == 162)
-      historicalDataResult.failure(new IBApiError(s"code: ${errorCode} msg: ${errorMsg}"))
-  }
-
-  override def show(string: String): Unit = {
-    log.info(s"show handler $string")
-  }
-
-  override def accountList(list: util.ArrayList[String]): Unit = {
-    log.info(s"accountList handler")
-  }
-
-
-  /*** IB API ***/
-  def connect(): Unit = {
-    log.info(s"Connecting to $host $port (clientId $clientId)")
-    apiState.synchronized {
-      apiController.connect(host, port, clientId)
-      while (apiState == APIState.WaitForConnection) {
-        log.info("Waiting for connection")
-        apiState.wait(1000)
-      }
-      apiState match {
-        case APIState.Connected =>
-          log.info("Connected")
-        case APIState.Disconnected =>
-          log.info("Connection failed")
-      }
+    reqPromise.get(id).foreach { x =>
+      val promise = x.asInstanceOf[Promise[_]]
+      promise.failure(new IBApiError(s"code: ${errorCode} msg: ${errorMsg}"))
     }
   }
 
-  def disconnect(): Unit = {
-    apiController.disconnect()
+  def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = {
+    reqId += 1
+    val promise = Promise[Seq[ContractDetails]]()
+    reqPromise += (reqId -> promise)
+    eclientSocket.reqContractDetails(reqId, contract)
+    promise.future
   }
 
-  def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = {
-    val result = Promise[Seq[ContractDetails]]()
-    apiController.reqContractDetails(contract, new IContractDetailsHandler {
-      override def contractDetails(list: util.ArrayList[ContractDetails]): Unit = {
-        result.success(list.toVector)
-      }
-    })
-    result.future
+  override def contractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
+    log.debug("contractDetails")
+
+  }
+
+  override def contractDetailsEnd(reqId: Int): Unit = {
+    log.debug("contractDetailsEnd")
+
+  }
+
+  override def historicalData(
+    reqId: Int,
+    date: String,
+    open: Double, high: Double, low: Double, close: Double,
+    volume: Int,
+    count: Int,
+    WAP: Double,
+    hasGaps: Boolean
+  ): Unit = {
+
   }
 
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
-    fundamentalsResult = Promise[String]()
-    apiController.reqFundamentals(contract, typ, new IFundamentalsHandler {
-      override def fundamentals(x: String): Unit = {
-        fundamentalsResult.success(x)
-      }
-    })
-    fundamentalsResult.future
+    reqId += 1
+    val promise = Promise[String]()
+    reqPromise += (reqId -> promise)
+    eclientSocket.reqFundamentalData(reqId, contract, typ.getApiString)
+    promise.future
+  }
+
+
+  override def fundamentalData(reqId: Int, data: String): Unit = {
+    reqPromise.get(reqId).foreach { x =>
+      val promise = x.asInstanceOf[Promise[String]]
+      promise.success(data)
+    }
   }
 
   case class BarGap(bar: Bar, hasGaps: Boolean)
 
-  def historicalData(contract: Contract, endDate: String, duration: Int, durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean): Future[IndexedSeq[BarGap]] = {
+  def historicalData(contract: Contract, endDate: String, duration: Int, durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean): Future[IndexedSeq[Bar]] = {
+    reqId += 1
+    val historicalDataHandler = new HistoricalDataHandler()
+    val promise = historicalDataHandler.promise
+    reqPromise += (reqId -> historicalDataHandler)
+    promise.future
+    /*
     historicalDataResult = Promise[IndexedSeq[BarGap]]()
     apiController.reqHistoricalData(contract, endDate, duration, durationUnit, barSize, whatToShow, rthOnly, new IHistoricalDataHandler {
       val queue = mutable.Queue[BarGap]()
@@ -122,5 +127,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       }
     })
     historicalDataResult.future
+    */
   }
 }
