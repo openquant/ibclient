@@ -189,9 +189,11 @@ object Main {
       case _ => throw new RuntimeException("contrac type")
     }
 
+    /*
     val futureContractDetails = ibclient.contractDetails(contract)
     val cd = Await.result(futureContractDetails, Duration.Inf)
     println(cd)
+    */
 
     val res = ibclient.historicalData(contract, options.historyEndDate, options.historyDuration, options.historyDurationUnit, options.historyBarSize, WhatToShow.MIDPOINT, false)
     val hist = Await.result(res, Duration.Inf)

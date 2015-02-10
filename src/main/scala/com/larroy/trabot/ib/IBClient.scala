@@ -28,6 +28,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends ApiCo
   connect()
 
 
+  /******* request state ********/
+  /* As there are some messages that signal particular errors in different calls, we need to hold the promises here so we
+  can fail them on such messages */
+  var historicalDataResult = Promise[IndexedSeq[BarGap]]()
+  var fundamentalsResult = Promise[String]()
+  /******************************/
+
   override def log(x: String): Unit = {
     //log.info(s"log handler $x")
   }
@@ -49,6 +56,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends ApiCo
 
   override def message(id: Int, errorCode: Int, errorMsg: String): Unit = {
     log.info(s"message handler id: $id errorCode: $errorCode errorMsg: $errorMsg")
+    if (errorCode == 162)
+      historicalDataResult.failure(new IBApiError(s"code: ${errorCode} msg: ${errorMsg}"))
   }
 
   override def show(string: String): Unit = {
@@ -93,30 +102,30 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends ApiCo
   }
 
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
-    val result = Promise[String]()
+    fundamentalsResult = Promise[String]()
     apiController.reqFundamentals(contract, typ, new IFundamentalsHandler {
       override def fundamentals(x: String): Unit = {
-        result.success(x)
+        fundamentalsResult.success(x)
       }
     })
-    result.future
+    fundamentalsResult.future
   }
 
   case class BarGap(bar: Bar, hasGaps: Boolean)
 
   def historicalData(contract: Contract, endDate: String, duration: Int, durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean): Future[IndexedSeq[BarGap]] = {
-    val result = Promise[IndexedSeq[BarGap]]()
+    historicalDataResult = Promise[IndexedSeq[BarGap]]()
     apiController.reqHistoricalData(contract, endDate, duration, durationUnit, barSize, whatToShow, rthOnly, new IHistoricalDataHandler {
       val queue = mutable.Queue[BarGap]()
       override def historicalDataEnd(): Unit = {
         log.debug("historicalDataEnd")
-        result.success(queue.toIndexedSeq)
+        historicalDataResult.success(queue.toIndexedSeq)
       }
       override def historicalData(bar: Bar, hasGaps: Boolean): Unit ={
         log.debug(s"historicalData ${bar.toString}")
         queue += new BarGap(bar, hasGaps)
       }
     })
-    result.future
+    historicalDataResult.future
   }
 }
