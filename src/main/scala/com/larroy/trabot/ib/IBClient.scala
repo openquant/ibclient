@@ -49,30 +49,38 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /**
    * A map of request id to Promise
    */
-  val reqPromise = mutable.Map.empty[Int, AnyRef]
+  val reqHandler = mutable.Map.empty[Int, AnyRef]
 
-  def connect(): Unit = {
+  private[this] var connectResult: Promise[Boolean] = null
+  
+  def connect(): Future[Boolean] = {
+    connectResult = Promise[Boolean]()
     eclientSocket.eConnect(host, port, clientId)
+    connectResult.future
   }
 
   def disconnect(): Unit = {
     eclientSocket.eDisconnect()
+    connectResult = null
   }
 
   override def nextValidId(id: Int): Unit = {
     orderId = id
     reqId = orderId + 10000000
     log.info(s"nextValidId: ${reqId}")
+    connectResult.success(true)
   }
 
   override def error(e: Exception): Unit = {
     log.error(s"error handler: ${e.getMessage}")
     log.error(s"${e.printStackTrace()}")
+    if (connectResult != null)
+      connectResult.failure(e)
   }
 
   override def error(id: Int, errorCode: Int, errorMsg: String): Unit = {
     log.error(s"Error ${id} ${errorCode} ${errorMsg}")
-    reqPromise.get(id).foreach { x =>
+    reqHandler.get(id).foreach { x =>
       val promise = x.asInstanceOf[Promise[_]]
       promise.failure(new IBApiError(s"code: ${errorCode} msg: ${errorMsg}"))
     }
@@ -85,7 +93,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = {
     reqId += 1
     val promise = Promise[Seq[ContractDetails]]()
-    reqPromise += (reqId -> promise)
+    reqHandler += (reqId -> promise)
     eclientSocket.reqContractDetails(reqId, contract)
     promise.future
   }
@@ -102,14 +110,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
     reqId += 1
     val promise = Promise[String]()
-    reqPromise += (reqId → promise)
+    reqHandler += (reqId → promise)
     eclientSocket.reqFundamentalData(reqId, contract, typ.getApiString)
     promise.future
   }
 
 
   override def fundamentalData(reqId: Int, data: String): Unit = {
-    reqPromise.get(reqId).foreach { x ⇒
+    reqHandler.get(reqId).foreach { x ⇒
       val promise = x.asInstanceOf[Promise[String]]
       promise.success(data)
     }
@@ -122,7 +130,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqId += 1
     val historicalDataHandler = new HistoricalDataHandler()
     val promise = historicalDataHandler.promise
-    reqPromise += (reqId → historicalDataHandler)
+    reqHandler += (reqId → historicalDataHandler)
 
     val durationStr = duration + " " + durationUnit.toString().charAt(0)
     eclientSocket.reqHistoricalData(reqId, contract, endDate, durationStr, barSize.toString, whatToShow.toString, if(rthOnly) 1 else 0, 2, Collections.emptyList[TagValue])
@@ -139,12 +147,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     wap: Double,
     hasGaps: Boolean
   ): Unit = {
-    log.debug(s"historicalData ${reqId}")
-    reqPromise.get(reqId).foreach { x =>
+    //log.debug(s"historicalData ${reqId}")
+    reqHandler.get(reqId).foreach { x =>
       val handler = x.asInstanceOf[HistoricalDataHandler]
       if (date.startsWith("finished")) {
         handler.promise.success(handler.queue.toIndexedSeq)
-        reqPromise.remove(reqId)
+        reqHandler.remove(reqId)
       } else {
         val longDate = IBClient.dateEpoch_s(date)
         handler.queue += new Bar(longDate, high, low, open, close, volume, count, wap, hasGaps)

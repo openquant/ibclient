@@ -182,8 +182,8 @@ object Main {
   }
 
   def history(options: Options): Unit = {
-    val ibclient = new IBClient("localhost", 7496, 2)
-    ibclient.connect()
+    val ibclient = new IBClient("localhost", 7496, 3)
+    Await.result(ibclient.connect(), Duration.Inf)
     val contract: Contract = options.contractType match {
       case SecType.STK => new StockContract(options.contract.get, options.contractExchange, options.contractCurrency)
       case SecType.FUT => new FutureContract(options.contract.get, options.contractExpiry, options.contractExchange, options.contractCurrency)
@@ -198,6 +198,7 @@ object Main {
 
     val res = ibclient.historicalData(contract, options.historyEndDate, options.historyDuration, options.historyDurationUnit, options.historyBarSize, WhatToShow.MIDPOINT, false)
     val hist = Await.result(res, Duration.Inf)
+    ibclient.disconnect()
     println(hist)
   }
 }
