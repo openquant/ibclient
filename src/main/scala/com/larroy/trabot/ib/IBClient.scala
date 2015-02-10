@@ -1,7 +1,7 @@
 package com.larroy.trabot.ib
 
 import java.util
-import java.util.{Calendar, Date}
+import java.util.{Collections, Calendar, Date}
 
 import com.ib.client.Types._
 import com.ib.client._
@@ -62,21 +62,26 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   override def nextValidId(id: Int): Unit = {
     orderId = id
     reqId = orderId + 10000000
-    log.info("nextValidId")
+    log.info(s"nextValidId: ${reqId}")
   }
 
   override def error(e: Exception): Unit = {
     log.error(s"error handler: ${e.getMessage}")
-    log.error(s"${e.getStackTrace}")
+    log.error(s"${e.printStackTrace()}")
   }
 
   override def error(id: Int, errorCode: Int, errorMsg: String): Unit = {
+    log.error(s"Error ${id} ${errorCode} ${errorMsg}")
     reqPromise.get(id).foreach { x =>
       val promise = x.asInstanceOf[Promise[_]]
       promise.failure(new IBApiError(s"code: ${errorCode} msg: ${errorMsg}"))
     }
   }
 
+  /**
+   * @param contract
+   * @return contract details for the given contract
+   */
   def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = {
     reqId += 1
     val promise = Promise[Seq[ContractDetails]]()
@@ -87,26 +92,24 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def contractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
     log.debug("contractDetails")
-
+    log.debug(contractDetails.toString)
   }
 
   override def contractDetailsEnd(reqId: Int): Unit = {
     log.debug("contractDetailsEnd")
-
   }
-
 
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
     reqId += 1
     val promise = Promise[String]()
-    reqPromise += (reqId -> promise)
+    reqPromise += (reqId → promise)
     eclientSocket.reqFundamentalData(reqId, contract, typ.getApiString)
     promise.future
   }
 
 
   override def fundamentalData(reqId: Int, data: String): Unit = {
-    reqPromise.get(reqId).foreach { x =>
+    reqPromise.get(reqId).foreach { x ⇒
       val promise = x.asInstanceOf[Promise[String]]
       promise.success(data)
     }
@@ -119,23 +122,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqId += 1
     val historicalDataHandler = new HistoricalDataHandler()
     val promise = historicalDataHandler.promise
-    reqPromise += (reqId -> historicalDataHandler)
+    reqPromise += (reqId → historicalDataHandler)
+
+    val durationStr = duration + " " + durationUnit.toString().charAt(0)
+    eclientSocket.reqHistoricalData(reqId, contract, endDate, durationStr, barSize.toString, whatToShow.toString, if(rthOnly) 1 else 0, 2, Collections.emptyList[TagValue])
+
     promise.future
-    /*
-    historicalDataResult = Promise[IndexedSeq[BarGap]]()
-    apiController.reqHistoricalData(contract, endDate, duration, durationUnit, barSize, whatToShow, rthOnly, new IHistoricalDataHandler {
-      val queue = mutable.Queue[BarGap]()
-      override def historicalDataEnd(): Unit = {
-        log.debug("historicalDataEnd")
-        historicalDataResult.success(queue.toIndexedSeq)
-      }
-      override def historicalData(bar: Bar, hasGaps: Boolean): Unit ={
-        log.debug(s"historicalData ${bar.toString}")
-        queue += new BarGap(bar, hasGaps)
-      }
-    })
-    historicalDataResult.future
-    */
   }
 
   override def historicalData(
@@ -147,6 +139,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     wap: Double,
     hasGaps: Boolean
   ): Unit = {
+    log.debug(s"historicalData ${reqId}")
     reqPromise.get(reqId).foreach { x =>
       val handler = x.asInstanceOf[HistoricalDataHandler]
       if (date.startsWith("finished")) {
