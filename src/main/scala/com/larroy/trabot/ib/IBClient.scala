@@ -3,9 +3,7 @@ package com.larroy.trabot.ib
 import java.util
 
 import com.ib.client.Types._
-import com.ib.client.{ContractDetails, Contract}
-import com.ib.controller.ApiController.{IHistoricalDataHandler, IContractDetailsHandler, IFundamentalsHandler}
-import com.ib.controller.{Bar, ApiConnection, ApiController}
+import com.ib.client.{EClientSocket, EWrapper, ContractDetails, Contract}
 
 import org.slf4j.{Logger, LoggerFactory}
 import scala.collection.JavaConversions._
@@ -21,37 +19,34 @@ object APIState extends Enumeration {
 /**
  * @author piotr 19.10.14
  */
-class IBClient(val host: String, val port: Int, val clientId: Int) extends ApiController.IConnectionHandler with ApiConnection.ILogger {
+class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrapper {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
-  var apiState = APIState.WaitForConnection
-  val apiController = new ApiController(this, this, this)
-  connect()
+  val eclientSocket = new EClientSocket(this)
+  val reqId: Int = 0
 
+  val reqMap = mutable.Map.empty[]
 
-  /******* request state ********/
-  /* As there are some messages that signal particular errors in different calls, we need to hold the promises here so we
-  can fail them on such messages */
-  var historicalDataResult = Promise[IndexedSeq[BarGap]]()
-  var fundamentalsResult = Promise[String]()
-  /******************************/
-
-  override def log(x: String): Unit = {
-    //log.info(s"log handler $x")
+  def connect(): Unit = {
+    eclientSocket.eConnect(host, port, clientId)
   }
 
-  override def connected(): Unit = {
-    log.info(s"connected handler")
-    apiState.synchronized(apiState = APIState.Connected)
-  }
-
-  override def disconnected(): Unit = {
-    log.info(s"disconnected handler")
-    apiState.synchronized(apiState = APIState.Disconnected)
-    //connect()
-  }
+  override def nextValidId(orderId: Int): Unit = {
+		orderId = orderId
+		reqId = orderId + 10000000
+    log.info("nextValidId")
+	}
 
   override def error(e: Exception): Unit = {
     log.error(s"error handler: ${e.getMessage}")
+  }
+
+	override def error(e: Exception): Unit = {
+    log.error(s"error handler: ${e.getMessage}")
+    log.error(s"${e.getStackTrace}")
+	}
+
+	override def error(id: Int, errorCode: Int, errorMsg: String): Unit = {
+
   }
 
   override def message(id: Int, errorCode: Int, errorMsg: String): Unit = {
