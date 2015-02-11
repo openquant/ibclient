@@ -82,6 +82,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     connectResult.success(true)
   }
 
+  /* connection and server ********************************************************************************/
+
+  override def currentTime(time: Long): Unit = {}
+
+  override def connectionClosed(): Unit = {}
+
   /* error and warnings handling ********************************************************************************/
 
   override def error(e: Exception): Unit = {
@@ -113,6 +119,76 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     log.error(s"error handler: ${str}")
     errorCount += 1
   }
+
+
+  /* fundamentals ********************************************************************************/
+
+  def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
+    reqId += 1
+    val promise = Promise[String]()
+    reqPromise += (reqId → promise)
+    eClientSocket.reqFundamentalData(reqId, contract, typ.getApiString)
+    promise.future
+  }
+
+  /// EWrapper handlers
+  override def fundamentalData(reqId: Int, data: String): Unit = {
+    reqPromise.remove(reqId).foreach { x ⇒
+      val promise = x.asInstanceOf[Promise[String]]
+      promise.success(data)
+    }
+  }
+
+
+  /* market data ********************************************************************************/
+
+  override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = {}
+  override def tickSize(tickerId: Int, field: Int, size: Int): Unit = {}
+  override def tickOptionComputation(tickerId: Int, field: Int, impliedVol: Double, delta: Double, optPrice: Double,
+    pvDividend: Double, gamma: Double, vega: Double, theta: Double, undPrice: Double
+  ): Unit = {}
+  override def tickGeneric(tickerId: Int, tickType: Int, value: Double): Unit = {}
+  override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {}
+  override def tickEFP(tickerId: Int, tickType: Int, basisPoints: Double, formattedBasisPoints: String,
+    impliedFuture: Double, holdDays: Int, futureExpiry: String, dividendImpact: Double, dividendsToExpiry: Double
+  ): Unit = {}
+  override def tickSnapshotEnd(reqId: Int): Unit = {}
+  override def marketDataType(reqId: Int, marketDataType: Int): Unit = {}
+
+  /* orders ********************************************************************************/
+
+  override def orderStatus(orderId: Int, status: String, filled: Int, remaining: Int, avgFillPrice: Double, permId: Int,
+    parentId: Int, lastFillPrice: Double, clientId: Int, whyHeld: String
+  ): Unit = {}
+
+  override def openOrder(orderId: Int, contract: Contract, order: Order, orderState: OrderState): Unit = {}
+
+  override def openOrderEnd(): Unit = {}
+
+  // nextValidId handled after connect up
+
+  override def deltaNeutralValidation(reqId: Int, underComp: DeltaNeutralContract): Unit = {}
+
+  /* account and portfolio ********************************************************************************/
+  override def updateAccountValue(key: String, value: String, currency: String, accountName: String): Unit = {}
+
+  override def updatePortfolio(contract: Contract, position: Int, marketPrice: Double, marketValue: Double,
+    averageCost: Double, unrealizedPNL: Double, realizedPNL: Double, accountName: String
+  ): Unit = {}
+
+  override def updateAccountTime(timeStamp: String): Unit = {}
+
+
+  override def accountDownloadEnd(accountName: String): Unit = {
+  }
+
+  override def accountSummary(reqId: Int, account: String, tag: String, value: String, currency: String): Unit = {}
+
+  override def accountSummaryEnd(reqId: Int): Unit = {}
+
+  override def position(account: String, contract: Contract, pos: Int, avgCost: Double): Unit = {}
+
+  override def positionEnd(): Unit = {}
 
   /* contract details ********************************************************************************/
 
@@ -151,23 +227,32 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
-  /* fundamentals ********************************************************************************/
-
-  def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
-    reqId += 1
-    val promise = Promise[String]()
-    reqPromise += (reqId → promise)
-    eClientSocket.reqFundamentalData(reqId, contract, typ.getApiString)
-    promise.future
+  override def bondContractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
   }
 
-  /// EWrapper handlers
-  override def fundamentalData(reqId: Int, data: String): Unit = {
-    reqPromise.remove(reqId).foreach { x ⇒
-      val promise = x.asInstanceOf[Promise[String]]
-      promise.success(data)
-    }
-  }
+  /* executions ********************************************************************************/
+
+  override def execDetails(reqId: Int, contract: Contract, execution: Execution): Unit = {}
+  override def execDetailsEnd(reqId: Int): Unit = {}
+  override def commissionReport(commissionReport: CommissionReport): Unit = {}
+
+  /* market depth ********************************************************************************/
+
+  override def updateMktDepthL2(tickerId: Int, position: Int, marketMaker: String, operation: Int, side: Int,
+    price: Double, size: Int
+  ): Unit = {}
+
+  override def updateMktDepth(tickerId: Int, position: Int, operation: Int, side: Int, price: Double, size: Int
+  ): Unit = {}
+
+  /* news bulletins ********************************************************************************/
+
+  override def updateNewsBulletin(msgId: Int, msgType: Int, message: String, origExchange: String): Unit = {}
+
+  /* financial advisors ********************************************************************************/
+
+  override def managedAccounts(accountsList: String): Unit = {}
+  override def receiveFA(faDataType: Int, xml: String): Unit = {}
 
   /* historical data ********************************************************************************/
 
@@ -226,103 +311,36 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
-  override def accountDownloadEnd(accountName: String): Unit = {
-  }
 
-  override def bondContractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
-  }
-
-  override def managedAccounts(accountsList: String): Unit = {}
-
-  override def verifyAndAuthMessageAPI(apiData: String, xyzChallange: String): Unit = {}
-
-  override def displayGroupList(reqId: Int, groups: String): Unit = {}
-
-  override def receiveFA(faDataType: Int, xml: String): Unit = {}
-
-  override def tickSnapshotEnd(reqId: Int): Unit = {}
-
-  override def marketDataType(reqId: Int, marketDataType: Int): Unit = {}
-
-  override def updateMktDepthL2(tickerId: Int, position: Int, marketMaker: String, operation: Int, side: Int,
-    price: Double, size: Int
-  ): Unit = {}
-
-  override def position(account: String, contract: Contract, pos: Int, avgCost: Double): Unit = {}
-
-  override def verifyCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
-
-  override def scannerDataEnd(reqId: Int): Unit = {}
-
-  override def deltaNeutralValidation(reqId: Int, underComp: DeltaNeutralContract): Unit = {}
-
-  override def execDetailsEnd(reqId: Int): Unit = {}
-
-  override def orderStatus(orderId: Int, status: String, filled: Int, remaining: Int, avgFillPrice: Double, permId: Int,
-    parentId: Int, lastFillPrice: Double, clientId: Int, whyHeld: String
-  ): Unit = {}
-
-  override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {}
-
-
-  override def tickSize(tickerId: Int, field: Int, size: Int): Unit = {}
-
-  override def accountSummaryEnd(reqId: Int): Unit = {}
-
-  override def tickOptionComputation(tickerId: Int, field: Int, impliedVol: Double, delta: Double, optPrice: Double,
-    pvDividend: Double, gamma: Double, vega: Double, theta: Double, undPrice: Double
-  ): Unit = {}
-
-  override def currentTime(time: Long): Unit = {}
-
-  override def updateNewsBulletin(msgId: Int, msgType: Int, message: String, origExchange: String): Unit = {}
-
-  override def openOrder(orderId: Int, contract: Contract, order: Order, orderState: OrderState): Unit = {}
+  /* market scanners ********************************************************************************/
 
   override def scannerParameters(xml: String): Unit = {}
-
-  override def updateMktDepth(tickerId: Int, position: Int, operation: Int, side: Int, price: Double, size: Int
-  ): Unit = {}
-
-  override def updateAccountTime(timeStamp: String): Unit = {}
-
-  override def connectionClosed(): Unit = {}
-
-  override def realtimeBar(reqId: Int, time: Long, open: Double, high: Double, low: Double, close: Double, volume: Long,
-    wap: Double, count: Int
-  ): Unit = {}
-
-  override def tickGeneric(tickerId: Int, tickType: Int, value: Double): Unit = {}
-
-  override def updatePortfolio(contract: Contract, position: Int, marketPrice: Double, marketValue: Double,
-    averageCost: Double, unrealizedPNL: Double, realizedPNL: Double, accountName: String
-  ): Unit = {}
-
-  override def verifyAndAuthCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
-
-  override def updateAccountValue(key: String, value: String, currency: String, accountName: String): Unit = {}
-
-  override def tickEFP(tickerId: Int, tickType: Int, basisPoints: Double, formattedBasisPoints: String,
-    impliedFuture: Double, holdDays: Int, futureExpiry: String, dividendImpact: Double, dividendsToExpiry: Double
-  ): Unit = {}
-
-  override def positionEnd(): Unit = {}
-
-  override def openOrderEnd(): Unit = {}
-
-  override def verifyMessageAPI(apiData: String): Unit = {}
-
-  override def execDetails(reqId: Int, contract: Contract, execution: Execution): Unit = {}
-
-  override def accountSummary(reqId: Int, account: String, tag: String, value: String, currency: String): Unit = {}
-
-  override def commissionReport(commissionReport: CommissionReport): Unit = {}
-
-  override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = {}
 
   override def scannerData(reqId: Int, rank: Int, contractDetails: ContractDetails, distance: String, benchmark: String,
     projection: String, legsStr: String
   ): Unit = {}
 
+  override def scannerDataEnd(reqId: Int): Unit = {}
+
+
+  /* realtime bars ********************************************************************************/
+
+  override def realtimeBar(reqId: Int, time: Long, open: Double, high: Double, low: Double, close: Double, volume: Long,
+    wap: Double, count: Int
+  ): Unit = {}
+
+  /* display groups ********************************************************************************/
+
+  override def displayGroupList(reqId: Int, groups: String): Unit = {}
   override def displayGroupUpdated(reqId: Int, contractInfo: String): Unit = {}
+
+  /* ********************************************************************************/
+
+  override def verifyAndAuthMessageAPI(apiData: String, xyzChallange: String): Unit = {}
+  override def verifyCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
+
+  /* ********************************************************************************/
+
+  override def verifyAndAuthCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
+  override def verifyMessageAPI(apiData: String): Unit = {}
 }
