@@ -75,11 +75,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     connectResult = null
   }
 
+  def isConnected: Boolean = eClientSocket.isConnected
+
   override def nextValidId(id: Int): Unit = {
     orderId = id
     reqId = orderId + 10000000
     log.debug(s"nextValidId: ${reqId}")
     connectResult.success(true)
+    connectResult = null
   }
 
   /* connection and server ********************************************************************************/
@@ -96,6 +99,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     log.error(s"${e.printStackTrace()}")
     if (connectResult != null)
       connectResult.failure(e)
+    reqPromise.foreach { kv ⇒
+      val promise = kv._2.asInstanceOf[Promise[_]]
+      promise.failure(e)
+    }
+    eClientSocket.eDisconnect()
   }
 
   override def error(id: Int, errorCode: Int, errorMsg: String): Unit = {
@@ -202,6 +210,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqHandler += (reqId → contractDetailsHandler)
     val promise = Promise[IndexedSeq[ContractDetails]]()
     reqPromise += (reqId → promise)
+    log.debug(s"reqContractDetails ${reqId}")
     eClientSocket.reqContractDetails(reqId, contract)
     promise.future
   }
@@ -228,6 +237,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   override def bondContractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
+    this.contractDetails(reqId, contractDetails)
   }
 
   /* executions ********************************************************************************/
@@ -278,6 +288,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqPromise += (reqId → promise)
 
     val durationStr = duration + " " + durationUnit.toString().charAt(0)
+    log.debug(s"reqHistoricalData ${reqId}")
     eClientSocket.reqHistoricalData(reqId, contract, endDate, durationStr, barSize.toString, whatToShow.toString,
       if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue]
     )
