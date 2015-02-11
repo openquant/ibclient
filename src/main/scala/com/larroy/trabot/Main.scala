@@ -99,7 +99,7 @@ object Main {
         opt[String]('e', "enddate") text ("end date") action {
           (arg, dest) => dest.copy(historyEndDate = arg)
         }
-      )
+        )
       cmd("history") text ("history") action {
         (_, dest) => dest.copy(mode = Mode.History)
       } children(
@@ -116,6 +116,9 @@ object Main {
         },
         opt[String]('s', "currency") text ("currency") action {
           (arg, dest) => dest.copy(contractCurrency = arg)
+        },
+        opt[String]('x', "expiry") text ("expiry") action {
+          (arg, dest) => dest.copy(contractExpiry = arg)
         },
         opt[Int]('d', "duration") text ("duration") action {
           (arg, dest) => dest.copy(historyDuration = arg)
@@ -212,7 +215,7 @@ object Main {
       case SecType.FUT => new FutureContract(options.contract.get, options.contractExpiry, options.contractExchange,
         options.contractCurrency
       )
-      case _ => throw new RuntimeException("contrac type")
+      case _ => throw new RuntimeException("contract type")
     }
 
     /*

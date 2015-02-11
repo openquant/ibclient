@@ -18,14 +18,17 @@ object APIState extends Enumeration {
 
 //import APIState._
 
+trait Handler
 
-case class HistoricalDataHandler(queue: mutable.Queue[Bar] = mutable.Queue.empty[Bar],
-  promise: Promise[IndexedSeq[Bar]] = Promise[IndexedSeq[Bar]]()
-)
+case class HistoricalDataHandler(queue: mutable.Queue[Bar] = mutable.Queue.empty[Bar]) extends Handler
 
-case class ContractDetailsHandler(details: mutable.ArrayBuffer[ContractDetails] = mutable.ArrayBuffer.empty[ContractDetails],
-  promise: Promise[IndexedSeq[ContractDetails]] = Promise[IndexedSeq[ContractDetails]]()
-)
+//promise: Promise[IndexedSeq[Bar]] = Promise[IndexedSeq[Bar]]()
+
+case class ContractDetailsHandler(
+  details: mutable.ArrayBuffer[ContractDetails] = mutable.ArrayBuffer.empty[ContractDetails]
+) extends Handler
+
+//promise: Promise[IndexedSeq[ContractDetails]] = Promise[IndexedSeq[ContractDetails]]()
 
 object IBClient {
   def dateEpoch_s(date: String): Long = {
@@ -53,10 +56,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /**
    * A map of request id to Promise
    */
-  val reqHandler = mutable.Map.empty[Int, AnyRef]
+  val reqHandler = mutable.Map.empty[Int, Handler]
+  val reqPromise = mutable.Map.empty[Int, AnyRef]
 
   private[this] var connectResult: Promise[Boolean] = null
-  
+
   def connect(): Future[Boolean] = {
     connectResult = Promise[Boolean]()
     eclientSocket.eConnect(host, port, clientId)
@@ -87,10 +91,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       log.warn(s"Warning ${id} ${errorCode} ${errorMsg}")
     } else {
       log.error(s"Error ${id} ${errorCode} ${errorMsg}")
-      reqHandler.get(id).foreach { x =>
-        val promise = x.asInstanceOf[Promise[_]]
+      log.error(s"${eclientSocket.isConnected}")
+      reqPromise.remove(id).foreach { p =>
+        val promise = p.asInstanceOf[Promise[_]]
         promise.failure(new IBApiError(s"code: ${errorCode} msg: ${errorMsg}"))
       }
+      reqHandler -= id
     }
   }
 
@@ -103,9 +109,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = {
     reqId += 1
     val contractDetailsHandler = new ContractDetailsHandler()
-    reqHandler += (reqId -> contractDetailsHandler)
+    reqHandler += (reqId → contractDetailsHandler)
+    val promise = Promise[IndexedSeq[ContractDetails]]()
+    reqPromise += (reqId → promise)
     eclientSocket.reqContractDetails(reqId, contract)
-    contractDetailsHandler.promise.future
+    promise.future
   }
 
   override def contractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
@@ -118,9 +126,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def contractDetailsEnd(reqId: Int): Unit = {
     log.debug(s"contractDetailsEnd ${reqId}")
-    reqHandler.remove(reqId).foreach { x ⇒
-      val contractDetailsHandler = x.asInstanceOf[ContractDetailsHandler]
-      contractDetailsHandler.promise.success(contractDetailsHandler.details)
+    reqHandler.remove(reqId).foreach { h ⇒
+      val contractDetailsHandler = h.asInstanceOf[ContractDetailsHandler]
+      reqPromise.remove(reqId).foreach { p ⇒
+        val promise = p.asInstanceOf[Promise[IndexedSeq[ContractDetails]]]
+        promise.success(contractDetailsHandler.details)
+      }
     }
   }
 
@@ -129,13 +140,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
     reqId += 1
     val promise = Promise[String]()
-    reqHandler += (reqId → promise)
+    reqPromise += (reqId → promise)
     eclientSocket.reqFundamentalData(reqId, contract, typ.getApiString)
     promise.future
   }
 
   override def fundamentalData(reqId: Int, data: String): Unit = {
-    reqHandler.get(reqId).foreach { x ⇒
+    reqPromise.remove(reqId).foreach { x ⇒
       val promise = x.asInstanceOf[Promise[String]]
       promise.success(data)
     }
@@ -147,12 +158,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean
   ): Future[IndexedSeq[Bar]] = {
     reqId += 1
-    val historicalDataHandler = new HistoricalDataHandler()
-    val promise = historicalDataHandler.promise
-    reqHandler += (reqId → historicalDataHandler)
+    reqHandler += (reqId → new HistoricalDataHandler())
+    val promise = Promise[IndexedSeq[Bar]]()
+    reqPromise += (reqId → promise)
 
     val durationStr = duration + " " + durationUnit.toString().charAt(0)
-    eclientSocket.reqHistoricalData(reqId, contract, endDate, durationStr, barSize.toString, whatToShow.toString, if(rthOnly) 1 else 0, 2, Collections.emptyList[TagValue])
+    eclientSocket.reqHistoricalData(reqId, contract, endDate, durationStr, barSize.toString, whatToShow.toString,
+      if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue]
+    )
 
     promise.future
   }
@@ -170,7 +183,10 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqHandler.get(reqId).foreach { x =>
       val handler = x.asInstanceOf[HistoricalDataHandler]
       if (date.startsWith("finished")) {
-        handler.promise.success(handler.queue.toIndexedSeq)
+        reqPromise.remove(reqId).foreach { p ⇒
+          val promise = p.asInstanceOf[Promise[IndexedSeq[Bar]]]
+          promise.success(handler.queue.toIndexedSeq)
+        }
         reqHandler.remove(reqId)
       } else {
         val longDate = IBClient.dateEpoch_s(date)
