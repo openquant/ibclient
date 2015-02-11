@@ -53,8 +53,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   var reqId: Int = 0
   var orderId: Int = 0
 
-  val errorCount: Int = 0
-  val warnCount: Int = 0
+  var errorCount: Int = 0
+  var warnCount: Int = 0
 
   /**
    * A map of request id to Promise
