@@ -65,12 +65,20 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   private[this] var connectResult: Promise[Boolean] = null
 
   def connect(): Future[Boolean] = {
-    connectResult = Promise[Boolean]()
-    eClientSocket.eConnect(host, port, clientId)
-    connectResult.future
+    if (eClientSocket.isConnected) {
+      log.warn("connect: Client already connected")
+      assert(connectResult == null)
+      Future.successful[Boolean](true)
+    } else {
+      connectResult = Promise[Boolean]()
+      eClientSocket.eConnect(host, port, clientId)
+      connectResult.future
+    }
   }
 
-  def disconnect(): Unit = {
+  def disconnect(): Unit = synchronized {
+    if (! eClientSocket.isConnected)
+      log.warn("disconnect: Client is not connected")
     eClientSocket.eDisconnect()
     connectResult = null
   }
@@ -131,7 +139,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* fundamentals ********************************************************************************/
 
-  def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = {
+  def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = synchronized {
     reqId += 1
     val promise = Promise[String]()
     reqPromise += (reqId → promise)
@@ -151,16 +159,23 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* market data ********************************************************************************/
 
   override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = {}
+
   override def tickSize(tickerId: Int, field: Int, size: Int): Unit = {}
+
   override def tickOptionComputation(tickerId: Int, field: Int, impliedVol: Double, delta: Double, optPrice: Double,
     pvDividend: Double, gamma: Double, vega: Double, theta: Double, undPrice: Double
   ): Unit = {}
+
   override def tickGeneric(tickerId: Int, tickType: Int, value: Double): Unit = {}
+
   override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {}
+
   override def tickEFP(tickerId: Int, tickType: Int, basisPoints: Double, formattedBasisPoints: String,
     impliedFuture: Double, holdDays: Int, futureExpiry: String, dividendImpact: Double, dividendsToExpiry: Double
   ): Unit = {}
+
   override def tickSnapshotEnd(reqId: Int): Unit = {}
+
   override def marketDataType(reqId: Int, marketDataType: Int): Unit = {}
 
   /* orders ********************************************************************************/
@@ -204,7 +219,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @param contract
    * @return contract details for the given contract
    */
-  def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = {
+  def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = synchronized {
     reqId += 1
     val contractDetailsHandler = new ContractDetailsHandler()
     reqHandler += (reqId → contractDetailsHandler)
@@ -243,7 +258,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* executions ********************************************************************************/
 
   override def execDetails(reqId: Int, contract: Contract, execution: Execution): Unit = {}
+
   override def execDetailsEnd(reqId: Int): Unit = {}
+
   override def commissionReport(commissionReport: CommissionReport): Unit = {}
 
   /* market depth ********************************************************************************/
@@ -262,6 +279,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* financial advisors ********************************************************************************/
 
   override def managedAccounts(accountsList: String): Unit = {}
+
   override def receiveFA(faDataType: Int, xml: String): Unit = {}
 
   /* historical data ********************************************************************************/
@@ -281,7 +299,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    */
   def historicalData(contract: Contract, endDate: String, duration: Int,
     durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean
-  ): Future[IndexedSeq[Bar]] = {
+  ): Future[IndexedSeq[Bar]] = synchronized {
     reqId += 1
     reqHandler += (reqId → new HistoricalDataHandler())
     val promise = Promise[IndexedSeq[Bar]]()
@@ -343,15 +361,18 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* display groups ********************************************************************************/
 
   override def displayGroupList(reqId: Int, groups: String): Unit = {}
+
   override def displayGroupUpdated(reqId: Int, contractInfo: String): Unit = {}
 
   /* ********************************************************************************/
 
   override def verifyAndAuthMessageAPI(apiData: String, xyzChallange: String): Unit = {}
+
   override def verifyCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
 
   /* ********************************************************************************/
 
   override def verifyAndAuthCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
+
   override def verifyMessageAPI(apiData: String): Unit = {}
 }
