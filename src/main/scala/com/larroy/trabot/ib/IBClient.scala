@@ -49,7 +49,7 @@ object IBClient {
  */
 class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrapper {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
-  val eclientSocket = new EClientSocket(this)
+  val eClientSocket = new EClientSocket(this)
   var reqId: Int = 0
   var orderId: Int = 0
 
@@ -66,12 +66,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   def connect(): Future[Boolean] = {
     connectResult = Promise[Boolean]()
-    eclientSocket.eConnect(host, port, clientId)
+    eClientSocket.eConnect(host, port, clientId)
     connectResult.future
   }
 
   def disconnect(): Unit = {
-    eclientSocket.eDisconnect()
+    eClientSocket.eDisconnect()
     connectResult = null
   }
 
@@ -99,7 +99,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     } else {
       errorCount += 1
       log.error(s"Error ${id} ${errorCode} ${errorMsg}")
-      log.error(s"${eclientSocket.isConnected}")
+      log.error(s"${eClientSocket.isConnected}")
       reqPromise.remove(id).foreach { p =>
         log.error(s"failing pending request ${id}")
         val promise = p.asInstanceOf[Promise[_]]
@@ -126,10 +126,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqHandler += (reqId → contractDetailsHandler)
     val promise = Promise[IndexedSeq[ContractDetails]]()
     reqPromise += (reqId → promise)
-    eclientSocket.reqContractDetails(reqId, contract)
+    eClientSocket.reqContractDetails(reqId, contract)
     promise.future
   }
 
+  /// EWrapper handlers
   override def contractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
     log.debug(s"contractDetails ${reqId}")
     reqHandler.get(reqId).foreach { x ⇒
@@ -138,6 +139,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
+  /// EWrapper handlers
   override def contractDetailsEnd(reqId: Int): Unit = {
     log.debug(s"contractDetailsEnd ${reqId}")
     reqHandler.remove(reqId).foreach { h ⇒
@@ -155,10 +157,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqId += 1
     val promise = Promise[String]()
     reqPromise += (reqId → promise)
-    eclientSocket.reqFundamentalData(reqId, contract, typ.getApiString)
+    eClientSocket.reqFundamentalData(reqId, contract, typ.getApiString)
     promise.future
   }
 
+  /// EWrapper handlers
   override def fundamentalData(reqId: Int, data: String): Unit = {
     reqPromise.remove(reqId).foreach { x ⇒
       val promise = x.asInstanceOf[Promise[String]]
@@ -190,13 +193,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqPromise += (reqId → promise)
 
     val durationStr = duration + " " + durationUnit.toString().charAt(0)
-    eclientSocket.reqHistoricalData(reqId, contract, endDate, durationStr, barSize.toString, whatToShow.toString,
+    eClientSocket.reqHistoricalData(reqId, contract, endDate, durationStr, barSize.toString, whatToShow.toString,
       if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue]
     )
 
     promise.future
   }
 
+  /// EWrapper handlers
   override def historicalData(
     reqId: Int,
     date: String,
