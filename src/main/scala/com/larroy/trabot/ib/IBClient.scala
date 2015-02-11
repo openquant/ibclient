@@ -53,6 +53,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   var reqId: Int = 0
   var orderId: Int = 0
 
+  val errorCount: Int = 0
+  val warnCount: Int = 0
+
   /**
    * A map of request id to Promise
    */
@@ -79,7 +82,10 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     connectResult.success(true)
   }
 
+  /* error and warnings handling ********************************************************************************/
+
   override def error(e: Exception): Unit = {
+    errorCount += 1
     log.error(s"error handler: ${e.getMessage}")
     log.error(s"${e.printStackTrace()}")
     if (connectResult != null)
@@ -88,16 +94,24 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def error(id: Int, errorCode: Int, errorMsg: String): Unit = {
     if (errorCode > 2000) {
+      warnCount += 1
       log.warn(s"Warning ${id} ${errorCode} ${errorMsg}")
     } else {
+      errorCount += 1
       log.error(s"Error ${id} ${errorCode} ${errorMsg}")
       log.error(s"${eclientSocket.isConnected}")
       reqPromise.remove(id).foreach { p =>
+        log.error(s"failing pending request ${id}")
         val promise = p.asInstanceOf[Promise[_]]
         promise.failure(new IBApiError(s"code: ${errorCode} msg: ${errorMsg}"))
       }
       reqHandler -= id
     }
+  }
+
+  override def error(str: String): Unit = {
+    log.error(s"error handler: ${str}")
+    errorCount += 1
   }
 
   /* contract details ********************************************************************************/
@@ -154,6 +168,19 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* historical data ********************************************************************************/
 
+  /**
+   * Request historical data for a given contract
+   * @param contract
+   * @param endDate format yyyymmdd hh:mm:ss tmz, where the time zone is allowed (optionally) after a space at the end.
+   * @param duration number of durationUnit to request
+   * @param durationUnit time span the request will cover one of [SECOND, DAY, WEEK, MONTH, YEAR] see [[DurationUnit]]
+   * @param barSize  span of tone bar
+   *                 one of [_1_secs, _5_secs, _10_secs, _15_secs, _30_secs, _1_min, _2_mins, _3_mins, _5_mins, _10_mins, _15_mins, _20_mins, _30_mins, _1_hour, _4_hours, _1_day, _1_week]
+   * @param whatToShow Determines the nature of data being extracted.
+   *                   One of: [TRADES, MIDPOINT, BID, ASK] for realtime bars and [BID_ASK, HISTORICAL_VOLATILITY, OPTION_IMPLIED_VOLATILITY, YIELD_ASK, YIELD_BID, YIELD_BID_ASK, YIELD_LAST]
+   * @param rthOnly only data from regular trading hours if true
+   * @return
+   */
   def historicalData(contract: Contract, endDate: String, duration: Int,
     durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean
   ): Future[IndexedSeq[Bar]] = {
@@ -233,7 +260,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {}
 
-  override def error(str: String): Unit = {}
 
   override def tickSize(tickerId: Int, field: Int, size: Int): Unit = {}
 
