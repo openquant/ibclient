@@ -71,7 +71,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   override def nextValidId(id: Int): Unit = {
     orderId = id
     reqId = orderId + 10000000
-    log.info(s"nextValidId: ${reqId}")
+    log.debug(s"nextValidId: ${reqId}")
     connectResult.success(true)
   }
 
