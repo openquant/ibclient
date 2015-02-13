@@ -1,12 +1,13 @@
 package com.larroy.trabot.ib
 
-import java.util
 import java.util.{Collections, Calendar, Date}
 
 import com.ib.client.Types._
 import com.ib.client._
 
 import org.slf4j.{Logger, LoggerFactory}
+import rx.lang.scala.{Observable, Subject}
+import rx.lang.scala.subjects.PublishSubject
 import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.concurrent.{Promise, Future}
@@ -27,6 +28,8 @@ case class HistoricalDataHandler(queue: mutable.Queue[Bar] = mutable.Queue.empty
 case class ContractDetailsHandler(
   details: mutable.ArrayBuffer[ContractDetails] = mutable.ArrayBuffer.empty[ContractDetails]
 ) extends Handler
+
+case class MarketDataHandler(contract: Contract, subject: Subject[Tick] = PublishSubject[Tick]()) extends Handler
 
 //promise: Promise[IndexedSeq[ContractDetails]] = Promise[IndexedSeq[ContractDetails]]()
 
@@ -157,6 +160,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
 
   /* market data ********************************************************************************/
+
+  def marketData(contract: Contract): Observable[Tick] = synchronized {
+    reqId += 1
+    eClientSocket.reqMktData(reqId, contract, "100,101,104,105,106,107,165,221,225,233,236,258,293,294,295,318", false, Collections.emptyList[TagValue])
+    val marketDataHandler = new MarketDataHandler(contract)
+    reqHandler += (reqId → marketDataHandler)
+    marketDataHandler.subject
+  }
 
   override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = {}
 
