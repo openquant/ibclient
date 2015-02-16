@@ -8,7 +8,7 @@ import com.ib.client.Types.SecType
  */
 class StockContract(symbol: String, exchange: String = "SMART", currency: String = "USD") extends Contract {
   symbol(symbol)
-  secType(SecType.STK.name());
-  exchange(exchange);
-  currency(currency);
+  secType(SecType.STK.name())
+  exchange(exchange)
+  currency(currency)
 }

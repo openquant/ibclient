@@ -216,7 +216,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def tickOptionComputation(tickerId: Int, field: Int, impliedVol: Double, delta: Double, optPrice: Double,
     pvDividend: Double, gamma: Double, vega: Double, theta: Double, undPrice: Double
-  ): Unit = {}
+  ): Unit = {
+    log.debug(s"tickOptionComputation ${tickerId}")
+  }
 
   override def tickGeneric(tickerId: Int, tickType: Int, value: Double): Unit = {
     log.debug(s"tickGeneric ${tickerId} ${tickType} ${value}")
@@ -225,19 +227,20 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {
     log.debug(s"tickString ${tickerId} ${tickType} ${value}")
-
   }
 
   override def tickEFP(tickerId: Int, tickType: Int, basisPoints: Double, formattedBasisPoints: String,
     impliedFuture: Double, holdDays: Int, futureExpiry: String, dividendImpact: Double, dividendsToExpiry: Double
   ): Unit = {
     log.debug(s"tickEFP ${tickerId} ${tickType} ${basisPoints} ")
-
   }
 
   override def tickSnapshotEnd(reqId: Int): Unit = {}
 
-  override def marketDataType(reqId: Int, marketDataType: Int): Unit = {}
+  override def marketDataType(reqId: Int, marketDataType: Int): Unit = {
+    log.debug(s"marketDataType ${reqId} ${marketDataType}")
+
+  }
 
   /* orders ********************************************************************************/
 
