@@ -19,7 +19,9 @@ object APIState extends Enumeration {
 
 //import APIState._
 
-trait Handler
+trait Handler {
+  def error(throwable: Throwable): Unit = {}
+}
 
 case class HistoricalDataHandler(queue: mutable.Queue[Bar] = mutable.Queue.empty[Bar]) extends Handler
 
@@ -29,7 +31,11 @@ case class ContractDetailsHandler(
   details: mutable.ArrayBuffer[ContractDetails] = mutable.ArrayBuffer.empty[ContractDetails]
 ) extends Handler
 
-case class MarketDataHandler(contract: Contract, subject: Subject[Tick] = PublishSubject[Tick]()) extends Handler
+case class MarketDataHandler(subscription: MarketDataSubscription, subject: Subject[Tick]) extends Handler {
+  override def error(throwable: Throwable): Unit = {
+    subject.onError(throwable)
+  }
+}
 
 //promise: Promise[IndexedSeq[ContractDetails]] = Promise[IndexedSeq[ContractDetails]]()
 
@@ -67,7 +73,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   private[this] var connectResult: Promise[Boolean] = null
 
-  def connect(): Future[Boolean] = {
+  def connect(): Future[Boolean] = synchronized {
     if (eClientSocket.isConnected) {
       log.warn("connect: Client already connected")
       assert(connectResult == null)
@@ -98,13 +104,18 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* connection and server ********************************************************************************/
 
-  override def currentTime(time: Long): Unit = {}
+  override def currentTime(time: Long): Unit = {
+    log.debug(s"currentTime: ${time}")
 
-  override def connectionClosed(): Unit = {}
+  }
+
+  override def connectionClosed(): Unit = {
+    log.error(s"connectionClosed")
+  }
 
   /* error and warnings handling ********************************************************************************/
 
-  override def error(e: Exception): Unit = {
+  override def error(e: Exception): Unit = synchronized {
     errorCount += 1
     log.error(s"error handler: ${e.getMessage}")
     log.error(s"${e.printStackTrace()}")
@@ -117,7 +128,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     eClientSocket.eDisconnect()
   }
 
-  override def error(id: Int, errorCode: Int, errorMsg: String): Unit = {
+  override def error(id: Int, errorCode: Int, errorMsg: String): Unit = synchronized {
     if (errorCode > 2000) {
       warnCount += 1
       log.warn(s"Warning ${id} ${errorCode} ${errorMsg}")
@@ -125,12 +136,15 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       errorCount += 1
       log.error(s"Error ${id} ${errorCode} ${errorMsg}")
       log.error(s"${eClientSocket.isConnected}")
+      val apierror = new IBApiError(s"code: ${errorCode} msg: ${errorMsg}")
       reqPromise.remove(id).foreach { p =>
         log.error(s"failing pending request ${id}")
         val promise = p.asInstanceOf[Promise[_]]
-        promise.failure(new IBApiError(s"code: ${errorCode} msg: ${errorMsg}"))
+        promise.failure(apierror)
       }
-      reqHandler -= id
+      reqHandler.remove(id).foreach { handler ⇒
+        handler.error(apierror)
+      }
     }
   }
 
@@ -143,6 +157,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* fundamentals ********************************************************************************/
 
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = synchronized {
+    if (! eClientSocket.isConnected)
+      throw new IBApiError("marketData: Client is not connected")
     reqId += 1
     val promise = Promise[String]()
     reqPromise += (reqId → promise)
@@ -161,29 +177,63 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* market data ********************************************************************************/
 
-  def marketData(contract: Contract): Observable[Tick] = synchronized {
+  def marketData(contract: Contract): MarketDataSubscription = synchronized {
+    if (! eClientSocket.isConnected)
+      throw new IBApiError("marketData: Client is not connected")
     reqId += 1
     eClientSocket.reqMktData(reqId, contract, "100,101,104,105,106,107,165,221,225,233,236,258,293,294,295,318", false, Collections.emptyList[TagValue])
-    val marketDataHandler = new MarketDataHandler(contract)
+    val publishSubject = PublishSubject[Tick]()
+    val subscription = new MarketDataSubscription(this, reqId, contract, publishSubject)
+    val marketDataHandler = new MarketDataHandler(subscription, publishSubject)
     reqHandler += (reqId → marketDataHandler)
-    marketDataHandler.subject
+    subscription
   }
 
-  override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = {}
+  def closeMarketData(id: Int): Unit = synchronized {
+    reqHandler.remove(id).foreach { handler ⇒
+      val marketDataHandler = handler.asInstanceOf[MarketDataHandler]
+      eClientSocket.cancelMktData(id)
+      marketDataHandler.subject.onCompleted()
+    }
+  }
 
-  override def tickSize(tickerId: Int, field: Int, size: Int): Unit = {}
+  override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = {
+    log.debug(s"tickPrice ${tickerId} ${field} ${price}")
+    var handled = false
+    reqHandler.get(tickerId).foreach { handler ⇒
+      val marketDataHandler = handler.asInstanceOf[MarketDataHandler]
+      marketDataHandler.subject.onNext(new Tick(TickType.get(field), price))
+      handled = true
+    }
+    if (! handled)
+      log.warn(s"tickPrice ${tickerId} ignored, no handler exists for that tickerId")
+  }
+
+  override def tickSize(tickerId: Int, tickType: Int, size: Int): Unit = {
+    log.debug(s"tickSize ${tickerId} ${tickType} ${size}")
+    tickPrice(tickerId, tickType, size.toDouble, 0)
+  }
 
   override def tickOptionComputation(tickerId: Int, field: Int, impliedVol: Double, delta: Double, optPrice: Double,
     pvDividend: Double, gamma: Double, vega: Double, theta: Double, undPrice: Double
   ): Unit = {}
 
-  override def tickGeneric(tickerId: Int, tickType: Int, value: Double): Unit = {}
+  override def tickGeneric(tickerId: Int, tickType: Int, value: Double): Unit = {
+    log.debug(s"tickGeneric ${tickerId} ${tickType} ${value}")
+    tickPrice(tickerId, tickType, value, 0)
+  }
 
-  override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {}
+  override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {
+    log.debug(s"tickString ${tickerId} ${tickType} ${value}")
+
+  }
 
   override def tickEFP(tickerId: Int, tickType: Int, basisPoints: Double, formattedBasisPoints: String,
     impliedFuture: Double, holdDays: Int, futureExpiry: String, dividendImpact: Double, dividendsToExpiry: Double
-  ): Unit = {}
+  ): Unit = {
+    log.debug(s"tickEFP ${tickerId} ${tickType} ${basisPoints} ")
+
+  }
 
   override def tickSnapshotEnd(reqId: Int): Unit = {}
 
@@ -231,6 +281,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @return contract details for the given contract
    */
   def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = synchronized {
+    if (! eClientSocket.isConnected)
+      throw new IBApiError("marketData: Client is not connected")
     reqId += 1
     val contractDetailsHandler = new ContractDetailsHandler()
     reqHandler += (reqId → contractDetailsHandler)
@@ -311,6 +363,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   def historicalData(contract: Contract, endDate: String, duration: Int,
     durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean
   ): Future[IndexedSeq[Bar]] = synchronized {
+    if (! eClientSocket.isConnected)
+      throw new IBApiError("marketData: Client is not connected")
+
     reqId += 1
     reqHandler += (reqId → new HistoricalDataHandler())
     val promise = Promise[IndexedSeq[Bar]]()

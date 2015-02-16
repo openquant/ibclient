@@ -9,6 +9,7 @@ import com.ib.contracts.StkContract
 import com.larroy.trabot.ib.IBClient
 import com.larroy.trabot.ib.contract.{FutureContract, StockContract}
 import org.slf4j.{Logger, LoggerFactory}
+import rx.schedulers.Schedulers
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -190,17 +191,16 @@ object Main {
   def test(options: Options): Unit = {
     val ibclient = new IBClient("localhost", 7496, 3)
     Await.result(ibclient.connect(), Duration.Inf)
-    val contract: Contract = options.contractType match {
-      case SecType.STK => new StockContract(options.contract.get, options.contractExchange, options.contractCurrency)
-      case SecType.FUT => new FutureContract(options.contract.get, options.contractExpiry, options.contractExchange,
-        options.contractCurrency
-      )
-      case _ => throw new RuntimeException("contrac type")
-    }
+    var s = ibclient.marketData(new StockContract("SPY", "SMART"))
+    s.data.subscribe(
+      {tick ⇒ println(tick)},
+      {error ⇒ throw(error)},
+      {() ⇒ println("Closed")}
+    )
+    while (true)
+      Thread.sleep(1000)
 
-    val futureContractDetails = ibclient.contractDetails(contract)
-    val cd = Await.result(futureContractDetails, Duration.Inf)
-    println(cd)
+
   }
 
   def populate(options: Options): Unit = {
