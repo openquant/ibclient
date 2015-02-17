@@ -94,7 +94,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   def isConnected: Boolean = eClientSocket.isConnected
 
-  override def nextValidId(id: Int): Unit = {
+  override def nextValidId(id: Int): Unit = synchronized {
     orderId = id
     reqId = orderId + 10000000
     log.debug(s"nextValidId: ${reqId}")
@@ -138,9 +138,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       log.warn(s"Warning ${id} ${errorCode} ${errorMsg}")
     } else {
       errorCount += 1
-      log.error(s"Error ${id} ${errorCode} ${errorMsg}")
-      log.error(s"${eClientSocket.isConnected}")
-      val apierror = new IBApiError(s"code: ${errorCode} msg: ${errorMsg}")
+      val errmsg = s"Error requestId: ${id} code: ${errorCode} msg: ${errorMsg}"
+      log.error(errmsg)
+      val apierror = new IBApiError(errmsg)
       if (connectResult != null) {
         // if we were connecting we need to fail the connecting promise
         if (errorCode == 507)
@@ -149,18 +149,19 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         connectResult = null
       } else {
         reqPromise.remove(id).foreach { p =>
-          log.error(s"failing pending request ${id}")
+          log.error(s"Failing and removing promise: ${id}")
           val promise = p.asInstanceOf[Promise[_]]
           promise.failure(apierror)
         }
         reqHandler.remove(id).foreach { handler ⇒
+          log.error(s"Propagating error to and removing handler: ${id}")
           handler.error(apierror)
         }
       }
     }
   }
 
-  override def error(str: String): Unit = {
+  override def error(str: String): Unit = synchronized {
     log.error(s"error handler: ${str}")
     errorCount += 1
   }
@@ -179,7 +180,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /// EWrapper handlers
-  override def fundamentalData(reqId: Int, data: String): Unit = {
+  override def fundamentalData(reqId: Int, data: String): Unit = synchronized {
     reqPromise.remove(reqId).foreach { x ⇒
       val promise = x.asInstanceOf[Promise[String]]
       promise.success(data)
@@ -198,6 +199,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val subscription = new MarketDataSubscription(this, reqId, contract, publishSubject)
     val marketDataHandler = new MarketDataHandler(subscription, publishSubject)
     reqHandler += (reqId → marketDataHandler)
+    log.debug(s"marketData reqId: ${reqId}")
     subscription
   }
 
@@ -205,11 +207,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqHandler.remove(id).foreach { handler ⇒
       val marketDataHandler = handler.asInstanceOf[MarketDataHandler]
       eClientSocket.cancelMktData(id)
+      log.debug(s"Closed market data line ${id}")
       marketDataHandler.subject.onCompleted()
     }
   }
 
-  override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = {
+  override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = synchronized {
     log.debug(s"tickPrice ${tickerId} ${field} ${price}")
     var handled = false
     reqHandler.get(tickerId).foreach { handler ⇒
@@ -218,7 +221,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       handled = true
     }
     if (! handled)
-      log.warn(s"tickPrice ${tickerId} ignored, no handler exists for that tickerId")
+      log.debug(s"tickPrice ${tickerId} ignored, no handler exists for that tickerId")
   }
 
   override def tickSize(tickerId: Int, tickType: Int, size: Int): Unit = {

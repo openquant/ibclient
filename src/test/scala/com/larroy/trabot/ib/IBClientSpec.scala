@@ -8,6 +8,7 @@ import com.ib.client.Contract
 import com.ib.client.Types.{BarSize, DurationUnit, WhatToShow, SecType}
 import com.larroy.trabot.ib.contract.{CashContract, FutureContract, StockContract}
 import com.typesafe.config.ConfigFactory
+import org.slf4j.{Logger, LoggerFactory}
 
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.Await
@@ -20,6 +21,7 @@ import scala.concurrent.duration._
 import org.specs2.mutable._
 
 class IBClientSpec extends Specification {
+  private val log: Logger = LoggerFactory.getLogger(this.getClass)
   val cfg = ConfigFactory.load().getConfig("trabot.test")
   val ibclient = connectedClient
 
@@ -60,16 +62,28 @@ class IBClientSpec extends Specification {
     "market data" in {
       val result = ArrayBuffer.empty[Tick]
       val subscription = ibclient.marketData(new CashContract("EUR", "EUR.USD"))
+      val currThread = Thread.currentThread()
       subscription.observableTick.subscribe(
         { tick ⇒
+          log.debug(s"Got tick ${tick}")
           result += tick
-          if (result.length >= 3)
-            subscription.notifyAll()
+          if (result.length >= 3) {
+            log.debug(s"Closing subscription: ${subscription.id}")
+            subscription.close()
+          }
         },
         {error ⇒ throw (error)},
-        {() ⇒ println("Closed")}
+        {() ⇒
+          println("Closed")
+          currThread.interrupt()
+        }
       )
-      subscription.wait(10000)
+      try {
+        Thread.sleep(testWaitDuration.toMillis)
+        log.error("Timeout waiting for market data")
+      } catch {
+        case e: InterruptedException ⇒
+      }
       (result.length >= 1)  must beTrue
     }
   }
