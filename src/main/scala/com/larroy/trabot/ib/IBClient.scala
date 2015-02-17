@@ -115,17 +115,21 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* error and warnings handling ********************************************************************************/
 
-  override def error(e: Exception): Unit = synchronized {
+  override def error(exception: Exception): Unit = synchronized {
     errorCount += 1
-    log.error(s"error handler: ${e.getMessage}")
-    log.error(s"${e.printStackTrace()}")
-    if (connectResult != null)
-      connectResult.failure(e)
-    reqPromise.foreach { kv ⇒
-      val promise = kv._2.asInstanceOf[Promise[_]]
-      promise.failure(e)
+    log.error(s"error handler: ${exception.getMessage}")
+    log.error(s"${exception.printStackTrace()}")
+    if (connectResult != null) {
+      connectResult.failure(exception)
+      connectResult = null
+    } else {
+      reqPromise.foreach { kv ⇒
+        val promise = kv._2.asInstanceOf[Promise[_]]
+        promise.failure(exception)
+      }
+      reqHandler.foreach { kv ⇒ kv._2.error(exception) }
+      eClientSocket.eDisconnect()
     }
-    eClientSocket.eDisconnect()
   }
 
   override def error(id: Int, errorCode: Int, errorMsg: String): Unit = synchronized {
@@ -137,13 +141,21 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       log.error(s"Error ${id} ${errorCode} ${errorMsg}")
       log.error(s"${eClientSocket.isConnected}")
       val apierror = new IBApiError(s"code: ${errorCode} msg: ${errorMsg}")
-      reqPromise.remove(id).foreach { p =>
-        log.error(s"failing pending request ${id}")
-        val promise = p.asInstanceOf[Promise[_]]
-        promise.failure(apierror)
-      }
-      reqHandler.remove(id).foreach { handler ⇒
-        handler.error(apierror)
+      if (connectResult != null) {
+        // if we were connecting we need to fail the connecting promise
+        if (errorCode == 507)
+          log.error("Check TWS logs, possible cause is duplicate client ID")
+        connectResult.failure(apierror)
+        connectResult = null
+      } else {
+        reqPromise.remove(id).foreach { p =>
+          log.error(s"failing pending request ${id}")
+          val promise = p.asInstanceOf[Promise[_]]
+          promise.failure(apierror)
+        }
+        reqHandler.remove(id).foreach { handler ⇒
+          handler.error(apierror)
+        }
       }
     }
   }

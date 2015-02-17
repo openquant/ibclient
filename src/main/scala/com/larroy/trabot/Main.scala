@@ -189,10 +189,10 @@ object Main {
   }
 
   def test(options: Options): Unit = {
-    val ibclient = new IBClient("localhost", 7496, 3)
+    val ibclient = new IBClient("localhost", 7496, 0)
     Await.result(ibclient.connect(), Duration.Inf)
     var s = ibclient.marketData(new StockContract("SPY", "SMART"))
-    s.data.subscribe(
+    s.observableTick.subscribe(
       {tick ⇒ println(tick)},
       {error ⇒ throw(error)},
       {() ⇒ println("Closed")}
