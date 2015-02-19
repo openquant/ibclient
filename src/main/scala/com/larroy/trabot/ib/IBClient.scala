@@ -35,6 +35,8 @@ case class MarketDataHandler(subscription: MarketDataSubscription, subject: Subj
 
 case class PositionHandler(queue: mutable.Queue[Position] = mutable.Queue.empty[Position]) extends Handler
 
+case class OpenOrdersHandler() extends Handler
+
 
 object IBClient {
   def dateEpoch_s(date: String): Long = {
@@ -68,7 +70,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   val reqHandler = mutable.Map.empty[Int, Handler]
   val reqPromise = mutable.Map.empty[Int, AnyRef]
 
-  private[this] var connectResult: Promise[Boolean] = null
+  private[this] var connectResult = Promise[Boolean]()
 
   private[this] var positionsPromise: Promise[IndexedSeq[Position]] = null
   private[this] var positionHandler: PositionHandler = null
@@ -77,10 +79,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   def connect(): Future[Boolean] = synchronized {
     if (eClientSocket.isConnected) {
       log.warn("connect: Client already connected")
-      assert(connectResult == null)
       Future.successful[Boolean](true)
     } else {
-      connectResult = Promise[Boolean]()
       eClientSocket.eConnect(host, port, clientId)
       connectResult.future
     }
@@ -90,7 +90,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     if (! eClientSocket.isConnected)
       log.warn("disconnect: Client is not connected")
     eClientSocket.eDisconnect()
-    connectResult = null
   }
 
   def isConnected: Boolean = eClientSocket.isConnected
@@ -100,7 +99,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqId = orderId + 10000000
     log.debug(s"nextValidId: ${reqId}")
     connectResult.success(true)
-    connectResult = null
   }
 
   /* connection and server ********************************************************************************/
@@ -120,17 +118,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     errorCount += 1
     log.error(s"error handler: ${exception.getMessage}")
     log.error(s"${exception.printStackTrace()}")
-    if (connectResult != null) {
-      connectResult.failure(exception)
-      connectResult = null
-    } else {
-      reqPromise.foreach { kv ⇒
-        val promise = kv._2.asInstanceOf[Promise[_]]
-        promise.failure(exception)
-      }
-      reqHandler.foreach { kv ⇒ kv._2.error(exception) }
-      eClientSocket.eDisconnect()
+    connectResult.failure(exception)
+    reqPromise.foreach { kv ⇒
+      val promise = kv._2.asInstanceOf[Promise[_]]
+      promise.failure(exception)
     }
+    reqHandler.foreach { kv ⇒ kv._2.error(exception) }
+    eClientSocket.eDisconnect()
   }
 
   override def error(id: Int, errorCode: Int, errorMsg: String): Unit = synchronized {
@@ -142,12 +136,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       val errmsg = s"Error requestId: ${id} code: ${errorCode} msg: ${errorMsg}"
       log.error(errmsg)
       val apierror = new IBApiError(errmsg)
-      if (connectResult != null) {
+      if (id == -1) {
         // if we were connecting we need to fail the connecting promise
         if (errorCode == 507)
           log.error("Check TWS logs, possible cause is duplicate client ID")
         connectResult.failure(apierror)
-        connectResult = null
       } else {
         reqPromise.remove(id).foreach { p =>
           log.error(s"Failing and removing promise: ${id}")
@@ -260,13 +253,29 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* orders ********************************************************************************/
 
+  def openOrders(): Unit = {
+    if (! eClientSocket.isConnected)
+      throw new IBApiError("marketData: Client is not connected")
+    eClientSocket.reqOpenOrders()
+  }
+
   override def orderStatus(orderId: Int, status: String, filled: Int, remaining: Int, avgFillPrice: Double, permId: Int,
     parentId: Int, lastFillPrice: Double, clientId: Int, whyHeld: String
-  ): Unit = {}
+  ): Unit = {
+    log.info(s"OrderStatus ${orderId} ${status}")
 
-  override def openOrder(orderId: Int, contract: Contract, order: Order, orderState: OrderState): Unit = {}
 
-  override def openOrderEnd(): Unit = {}
+  }
+
+  override def openOrder(orderId: Int, contract: Contract, order: Order, orderState: OrderState): Unit = {
+    log.info(s"openOrder ${orderId} ${contract}")
+
+  }
+
+  override def openOrderEnd(): Unit = {
+    log.info(s"openOrderEnd")
+
+  }
 
   // nextValidId handled after connect up
 
