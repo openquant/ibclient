@@ -6,9 +6,8 @@ import com.ib.client.Types._
 import com.ib.client._
 
 import org.slf4j.{Logger, LoggerFactory}
-import rx.lang.scala.{Observable, Subject}
+import rx.lang.scala.Subject
 import rx.lang.scala.subjects.PublishSubject
-import scala.collection.JavaConversions._
 import scala.collection.mutable
 import scala.concurrent.{Promise, Future}
 
@@ -17,15 +16,12 @@ object APIState extends Enumeration {
   val WaitForConnection, Connected, Disconnected = Value
 }
 
-//import APIState._
 
 trait Handler {
   def error(throwable: Throwable): Unit = {}
 }
 
 case class HistoricalDataHandler(queue: mutable.Queue[Bar] = mutable.Queue.empty[Bar]) extends Handler
-
-//promise: Promise[IndexedSeq[Bar]] = Promise[IndexedSeq[Bar]]()
 
 case class ContractDetailsHandler(
   details: mutable.ArrayBuffer[ContractDetails] = mutable.ArrayBuffer.empty[ContractDetails]
@@ -36,8 +32,6 @@ case class MarketDataHandler(subscription: MarketDataSubscription, subject: Subj
     subject.onError(throwable)
   }
 }
-
-//promise: Promise[IndexedSeq[ContractDetails]] = Promise[IndexedSeq[ContractDetails]]()
 
 object IBClient {
   def dateEpoch_s(date: String): Long = {
