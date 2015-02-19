@@ -218,7 +218,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     var handled = false
     reqHandler.get(tickerId).foreach { handler ⇒
       val marketDataHandler = handler.asInstanceOf[MarketDataHandler]
-      marketDataHandler.subject.onNext(new Tick(TickType.get(field), price))
+      marketDataHandler.subject.onNext(Tick(field, price))
       handled = true
     }
     if (! handled)
