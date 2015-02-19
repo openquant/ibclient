@@ -72,8 +72,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   private[this] var connectResult = Promise[Boolean]()
 
-  private[this] var positionsPromise: Promise[IndexedSeq[Position]] = null
-  private[this] var positionHandler: PositionHandler = null
+  private[this] var positionsPromise: Option[Promise[IndexedSeq[Position]]] = None
+  private[this] var positionHandler: Option[PositionHandler] = None
 
 
   def connect(): Future[Boolean] = synchronized {
@@ -87,7 +87,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   def disconnect(): Unit = synchronized {
-    if (! eClientSocket.isConnected)
+    if (!eClientSocket.isConnected)
       log.warn("disconnect: Client is not connected")
     eClientSocket.eDisconnect()
   }
@@ -123,7 +123,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       val promise = kv._2.asInstanceOf[Promise[_]]
       promise.failure(exception)
     }
-    reqHandler.foreach { kv ⇒ kv._2.error(exception) }
+    reqHandler.foreach { kv ⇒ kv._2.error(exception)}
     eClientSocket.eDisconnect()
   }
 
@@ -164,7 +164,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* fundamentals ********************************************************************************/
 
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = synchronized {
-    if (! eClientSocket.isConnected)
+    if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
     reqId += 1
     val promise = Promise[String]()
@@ -185,10 +185,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* market data ********************************************************************************/
 
   def marketData(contract: Contract): MarketDataSubscription = synchronized {
-    if (! eClientSocket.isConnected)
+    if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
     reqId += 1
-    eClientSocket.reqMktData(reqId, contract, "100,101,104,105,106,107,165,221,225,233,236,258,293,294,295,318", false, Collections.emptyList[TagValue])
+    eClientSocket.reqMktData(reqId, contract, "100,101,104,105,106,107,165,221,225,233,236,258,293,294,295,318", false,
+      Collections.emptyList[TagValue]
+    )
     val publishSubject = PublishSubject[Tick]()
     val subscription = new MarketDataSubscription(this, reqId, contract, publishSubject)
     val marketDataHandler = new MarketDataHandler(subscription, publishSubject)
@@ -214,7 +216,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       marketDataHandler.subject.onNext(Tick(field, price))
       handled = true
     }
-    if (! handled)
+    if (!handled)
       log.debug(s"tickPrice ${tickerId} ignored, no handler exists for that tickerId")
   }
 
@@ -254,7 +256,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* orders ********************************************************************************/
 
   def openOrders(): Unit = {
-    if (! eClientSocket.isConnected)
+    if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
     eClientSocket.reqOpenOrders()
   }
@@ -301,30 +303,28 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* Positions ********************************************************************************/
 
   def positions(): Future[IndexedSeq[Position]] = synchronized {
-    if (! eClientSocket.isConnected)
+    if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
-    if (positionHandler != null)
+    if (positionHandler.nonEmpty)
       log.warn("Positions request might be overlapping with previous one")
-    positionHandler = new PositionHandler()
-    positionsPromise = Promise[IndexedSeq[Position]]()
+    positionHandler = Some(new PositionHandler())
+    positionsPromise = Some(Promise[IndexedSeq[Position]]())
     log.debug("positions")
     eClientSocket.reqPositions()
-    positionsPromise.future
+    positionsPromise.get.future
   }
 
   override def position(account: String, contract: Contract, pos: Int, avgCost: Double): Unit = synchronized {
-    if (positionHandler != null) {
-      positionHandler.queue += new Position(account, contract, pos, avgCost)
+    positionHandler.foreach { handler ⇒
+      handler.queue += new Position(account, contract, pos, avgCost)
     }
   }
 
   override def positionEnd(): Unit = synchronized {
-    if (positionHandler != null && positionsPromise != null) {
-      positionsPromise.success(positionHandler.queue.toIndexedSeq)
-      positionsPromise = null
-      positionHandler = null
-    } else
-      log.error("positionEnd with null handler and promise")
+    positionHandler.foreach { ph ⇒
+      positionsPromise.foreach(_.success(ph.queue.toIndexedSeq))
+    }
+    positionHandler = None
   }
 
   /* contract details ********************************************************************************/
@@ -334,7 +334,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @return contract details for the given contract
    */
   def contractDetails(contract: Contract): Future[Seq[ContractDetails]] = synchronized {
-    if (! eClientSocket.isConnected)
+    if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
     reqId += 1
     val contractDetailsHandler = new ContractDetailsHandler()
@@ -416,7 +416,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   def historicalData(contract: Contract, endDate: String, duration: Int,
     durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean
   ): Future[IndexedSeq[Bar]] = synchronized {
-    if (! eClientSocket.isConnected)
+    if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
 
     reqId += 1
