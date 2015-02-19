@@ -86,5 +86,10 @@ class IBClientSpec extends Specification {
       }
       (result.length >= 1)  must beTrue
     }
+
+    "positions" in {
+      val pos = Await.result(ibclient.positions(), testWaitDuration)
+      pos must not be empty
+    }
   }
 }

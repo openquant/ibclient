@@ -33,6 +33,9 @@ case class MarketDataHandler(subscription: MarketDataSubscription, subject: Subj
   }
 }
 
+case class PositionHandler(queue: mutable.Queue[Position] = mutable.Queue.empty[Position]) extends Handler
+
+
 object IBClient {
   def dateEpoch_s(date: String): Long = {
     if (date.length() == 8) {
@@ -66,6 +69,10 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   val reqPromise = mutable.Map.empty[Int, AnyRef]
 
   private[this] var connectResult: Promise[Boolean] = null
+
+  private[this] var positionsPromise: Promise[IndexedSeq[Position]] = null
+  private[this] var positionHandler: PositionHandler = null
+
 
   def connect(): Future[Boolean] = synchronized {
     if (eClientSocket.isConnected) {
@@ -282,9 +289,34 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def accountSummaryEnd(reqId: Int): Unit = {}
 
-  override def position(account: String, contract: Contract, pos: Int, avgCost: Double): Unit = {}
+  /* Positions ********************************************************************************/
 
-  override def positionEnd(): Unit = {}
+  def positions(): Future[IndexedSeq[Position]] = synchronized {
+    if (! eClientSocket.isConnected)
+      throw new IBApiError("marketData: Client is not connected")
+    if (positionHandler != null)
+      log.warn("Positions request might be overlapping with previous one")
+    positionHandler = new PositionHandler()
+    positionsPromise = Promise[IndexedSeq[Position]]()
+    log.debug("positions")
+    eClientSocket.reqPositions()
+    positionsPromise.future
+  }
+
+  override def position(account: String, contract: Contract, pos: Int, avgCost: Double): Unit = synchronized {
+    if (positionHandler != null) {
+      positionHandler.queue += new Position(account, contract, pos, avgCost)
+    }
+  }
+
+  override def positionEnd(): Unit = synchronized {
+    if (positionHandler != null && positionsPromise != null) {
+      positionsPromise.success(positionHandler.queue.toIndexedSeq)
+      positionsPromise = null
+      positionHandler = null
+    } else
+      log.error("positionEnd with null handler and promise")
+  }
 
   /* contract details ********************************************************************************/
 
