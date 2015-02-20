@@ -3,7 +3,8 @@ package com.larroy.trabot.ib
 import java.util.{Collections, Calendar, Date}
 
 import com.ib.client.Types._
-import com.ib.client._
+import com.ib.client.{Order ⇒ IBOrder, _}
+import com.larroy.trabot.ib.order.{Sell, Buy, Order}
 
 import org.slf4j.{Logger, LoggerFactory}
 import rx.lang.scala.Subject
@@ -50,6 +51,8 @@ object IBClient {
     } else
       date.toLong
   }
+
+
 }
 
 /**
@@ -255,6 +258,15 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* orders ********************************************************************************/
 
+  def placeOrder(contract: Contract, order: Order): Unit = {
+    val iBOrder = order.toIBOrder
+    if (iBOrder.orderId() == 0) {
+      orderId += 1
+      iBOrder.orderId(orderId)
+    }
+    eClientSocket.placeOrder(iBOrder.orderId(), contract, iBOrder)
+  }
+
   def openOrders(): Unit = {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
@@ -269,7 +281,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   }
 
-  override def openOrder(orderId: Int, contract: Contract, order: Order, orderState: OrderState): Unit = {
+  override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = {
     log.info(s"openOrder ${orderId} ${contract}")
 
   }
