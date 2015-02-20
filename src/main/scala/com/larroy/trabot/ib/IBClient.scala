@@ -4,6 +4,7 @@ import java.util.{Collections, Calendar, Date}
 
 import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
+import com.larroy.trabot.ib.handler._
 import com.larroy.trabot.ib.order.{Sell, Buy, Order}
 
 import org.slf4j.{Logger, LoggerFactory}
@@ -17,28 +18,6 @@ object APIState extends Enumeration {
   val WaitForConnection, Connected, Disconnected = Value
 }
 
-
-trait Handler {
-  def error(throwable: Throwable): Unit = {}
-}
-
-case class HistoricalDataHandler(queue: mutable.Queue[Bar] = mutable.Queue.empty[Bar]) extends Handler
-
-case class ContractDetailsHandler(
-  details: mutable.ArrayBuffer[ContractDetails] = mutable.ArrayBuffer.empty[ContractDetails]
-) extends Handler
-
-case class MarketDataHandler(subscription: MarketDataSubscription, subject: Subject[Tick]) extends Handler {
-  override def error(throwable: Throwable): Unit = {
-    subject.onError(throwable)
-  }
-}
-
-case class PositionHandler(queue: mutable.Queue[Position] = mutable.Queue.empty[Position]) extends Handler
-
-case class OpenOrdersHandler() extends Handler
-
-
 object IBClient {
   def dateEpoch_s(date: String): Long = {
     if (date.length() == 8) {
@@ -51,8 +30,6 @@ object IBClient {
     } else
       date.toLong
   }
-
-
 }
 
 /**
