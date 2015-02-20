@@ -8,7 +8,7 @@ import com.ib.client.{Order ⇒ IBOrder}
  * @author piotr 19.02.15
  */
 trait Order {
-  val kind: Kind = ???
+  def kind: Kind = ???
   def toIBOrder: IBOrder = {
     import com.larroy.trabot.ib.order.kind._
     val iBOrder = new IBOrder()
