@@ -235,7 +235,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* orders ********************************************************************************/
 
-  def placeOrder(contract: Contract, order: Order): Unit = {
+  def placeOrder(contract: Contract, order: Order): Unit = synchronized {
     val iBOrder = order.toIBOrder
     if (iBOrder.orderId() == 0) {
       orderId += 1
@@ -244,7 +244,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     eClientSocket.placeOrder(iBOrder.orderId(), contract, iBOrder)
   }
 
-  def openOrders(): Unit = {
+  def openOrders(): Unit = synchronized {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
     eClientSocket.reqOpenOrders()
@@ -252,20 +252,16 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def orderStatus(orderId: Int, status: String, filled: Int, remaining: Int, avgFillPrice: Double, permId: Int,
     parentId: Int, lastFillPrice: Double, clientId: Int, whyHeld: String
-  ): Unit = {
+  ): Unit = synchronized {
     log.info(s"OrderStatus ${orderId} ${status}")
-
-
   }
 
-  override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = {
-    log.info(s"openOrder ${orderId} ${contract}")
-
+  override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = synchronized {
+    log.info(s"openOrder ${orderId} ${contract} ${orderState}")
   }
 
-  override def openOrderEnd(): Unit = {
+  override def openOrderEnd(): Unit = synchronized {
     log.info(s"openOrderEnd")
-
   }
 
   // nextValidId handled after connect up

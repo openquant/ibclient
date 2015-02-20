@@ -9,12 +9,19 @@ import com.ib.client.{Order ⇒ IBOrder}
  */
 trait Order {
   def kind: Kind = ???
+  def quantity: Int = ???
   def toIBOrder: IBOrder = {
     import com.larroy.trabot.ib.order.kind._
     val iBOrder = new IBOrder()
     this match {
-      case Buy(_) ⇒ iBOrder.action("BUY")
-      case Sell(_) ⇒ iBOrder.action("SELL")
+      case Buy(_, qty) ⇒ {
+        iBOrder.action("BUY")
+        iBOrder.totalQuantity(qty)
+      }
+      case Sell(_, qty) ⇒ {
+        iBOrder.action("SELL")
+        iBOrder.totalQuantity(qty)
+      }
     }
     this.kind match {
       case Limit(limit) ⇒ {
