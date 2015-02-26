@@ -4,7 +4,7 @@ assemblySettings
 
 org.scalastyle.sbt.ScalastylePlugin.Settings
 
-name := "trabot"
+name := "ibclient"
 
 version := "0.1"
 
