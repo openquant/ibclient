@@ -13,10 +13,19 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.util.{Success, Failure}
 
-case class ValidDurations(barSize: BarSize, durationUnit: DurationUnit, durations: Array[Int])
+import net.ceedubs.ficus.Ficus._
+
+object HistoryLimits {
+  private[this] val cfg = ConfigFactory.load().getConfig("ibclient.historyLimits")
+  def apply(durationUnit: DurationUnit, barSize: BarSize): Option[Int] = {
+    val path = s"${durationUnit.name}.${barSize.name}"
+    cfg.as[Option[Int]](path)
+  }
+}
 
 /**
  * @author piotr 01.03.15
+ * History limits are not clearly documented, this class can automatically find the limits
  */
 class HistoryLimits {
   private[this] val log: Logger = LoggerFactory.getLogger(this.getClass)

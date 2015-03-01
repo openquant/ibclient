@@ -10,7 +10,7 @@ version := "0.1"
 
 organization := "com.larroy"
 
-scalaVersion := "2.10.3"
+scalaVersion := "2.11.5"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-feature", "-encoding", "utf8")
 
@@ -34,6 +34,7 @@ libraryDependencies ++= {
     "org.xerial" % "sqlite-jdbc" % "3.8.7",
     "com.github.tototoshi" %% "scala-csv" % "1.1.2",
     "com.typesafe" % "config" % "1.2.1",
+    "net.ceedubs" %% "ficus" % "1.1.2",
     "io.reactivex" %% "rxscala" % "0.23.1",
     "com.google.guava" % "guava" % "18.0"
   )
