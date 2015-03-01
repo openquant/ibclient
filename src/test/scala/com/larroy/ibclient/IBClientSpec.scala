@@ -20,7 +20,7 @@ import org.specs2.mutable._
 
 class IBClientSpec extends Specification {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
-  val cfg = ConfigFactory.load().getConfig("trabot.test")
+  val cfg = ConfigFactory.load().getConfig("ibclient.test")
   val ibclient = connectedClient
 
   def testWaitDuration = Duration(cfg.getInt("tws.timeout_s"), SECONDS)

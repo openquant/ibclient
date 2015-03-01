@@ -20,7 +20,7 @@ case class ValidDurations(barSize: BarSize, durationUnit: DurationUnit, duration
  */
 class HistoryLimits {
   private[this] val log: Logger = LoggerFactory.getLogger(this.getClass)
-  private[this] val cfg = ConfigFactory.load().getConfig("trabot.test")
+  private[this] val cfg = ConfigFactory.load().getConfig("ibclient.test")
   private[this] val ibclient = connectedClient
   private[this] val endDate = new SimpleDateFormat("yyyyMMdd hh:mm:ss").format(new Date())
   private[this] val contract = testStockContract
