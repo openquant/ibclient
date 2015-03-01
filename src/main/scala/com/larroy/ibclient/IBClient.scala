@@ -105,7 +105,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       val promise = kv._2.asInstanceOf[Promise[_]]
       promise.failure(exception)
     }
+    reqPromise.clear()
     reqHandler.foreach { kv ⇒ kv._2.error(exception)}
+    reqHandler.clear()
     eClientSocket.eDisconnect()
   }
 
@@ -119,11 +121,25 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       log.error(errmsg)
       val apierror = new IBApiError(errmsg)
       if (id == -1) {
+        // Error not specific to any request, these can be quite tricky to handle
         // if we were connecting we need to fail the connecting promise
         if (errorCode == 507)
           log.error("Check TWS logs, possible cause is duplicate client ID")
-        connectResult.failure(apierror)
+        if (connectResult.isCompleted) {
+          // if we were not connecting we fail everything in flight
+          // FIXME: improve in the case of connection lost / restored
+          reqPromise.foreach { kv ⇒
+            val promise = kv._2.asInstanceOf[Promise[_]]
+            promise.failure(apierror)
+          }
+          reqPromise.clear()
+          reqHandler.foreach { kv ⇒ kv._2.error(apierror)}
+          reqHandler.clear()
+        } else
+          connectResult.failure(apierror)
+
       } else {
+        // error specific to particular request with id: id
         reqPromise.remove(id).foreach { p =>
           log.error(s"Failing and removing promise: ${id}")
           val promise = p.asInstanceOf[Promise[_]]
