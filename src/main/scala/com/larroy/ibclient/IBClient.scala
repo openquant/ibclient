@@ -5,20 +5,12 @@ import java.util.{Collections, Calendar, Date}
 import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
 import com.larroy.ibclient.handler._
-import com.larroy.ibclient.handler._
-import com.larroy.ibclient.order.Buy
 import com.larroy.ibclient.order.Order
 
 import org.slf4j.{Logger, LoggerFactory}
-import rx.lang.scala.Subject
 import rx.lang.scala.subjects.PublishSubject
 import scala.collection.mutable
 import scala.concurrent.{Promise, Future}
-
-object APIState extends Enumeration {
-  type APIState = Value
-  val WaitForConnection, Connected, Disconnected = Value
-}
 
 object IBClient {
   def dateEpoch_s(date: String): Long = {
@@ -34,8 +26,15 @@ object IBClient {
   }
 }
 
+
 /**
- * @author piotr 19.10.14
+ * @param host host where TWS is running
+ * @param port port configured in TWS API settings
+ * @param clientId an integer to identify this client, a duplicated clientId will cause an error on connect
+ *
+ * The API is fully asynchronous and thread safe.
+ * Most of the calls return a Future of the desired result that is eventually completed sucessfully or with
+ * an error describing the problem.
  */
 class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrapper {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
@@ -57,7 +56,16 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   private[this] var positionsPromise: Option[Promise[IndexedSeq[Position]]] = None
   private[this] var positionHandler: Option[PositionHandler] = None
 
-
+  /**
+   * @return A Future[Boolean] that is completed once the client is connected and set to true. If it can't connect
+   *         it will be set to false
+   *
+   * @example
+   * {{{
+   *       val ibclient = new IBClient("localhost", 7496, 1)
+   *       val connected = Await.result(ibclient.connect(), testWaitDuration)
+   * }}}
+   */
   def connect(): Future[Boolean] = synchronized {
     if (eClientSocket.isConnected) {
       log.warn("connect: Client already connected")
@@ -68,12 +76,18 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
+  /**
+   * Disconnect from TWS
+   */
   def disconnect(): Unit = synchronized {
     if (!eClientSocket.isConnected)
       log.warn("disconnect: Client is not connected")
     eClientSocket.eDisconnect()
   }
 
+  /**
+   * @return true if the client is connected
+   */
   def isConnected: Boolean = eClientSocket.isConnected
 
   override def nextValidId(id: Int): Unit = synchronized {
@@ -161,6 +175,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* fundamentals ********************************************************************************/
 
+  /**
+   * Request fundamentals
+   * @param contract
+   * @param typ any of ReportSnapshot, ReportsFinSummary, ReportRatios, ReportsFinStatements, RESC, CalendarReport
+   * @see [[FundamentalType]]
+   * @return a future string, completed with the data
+   */
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = synchronized {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
@@ -182,6 +203,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* market data ********************************************************************************/
 
+
+  /**
+   * Request market data for the given contract
+   * @param contract
+   * @return a [[MarketDataSubscription]] which contains an Rx observable through which the [[Tick]] is delivered
+   *         when is available. This allows to handle market data asynchronously by using reactive programming patterns.
+   */
   def marketData(contract: Contract): MarketDataSubscription = synchronized {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
@@ -197,6 +225,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     subscription
   }
 
+  /**
+   * Close a market data line
+   * @param id id of the [[MarketDataSubscription]]
+   * if there's no subscription with the given id this call has no effect
+   */
   def closeMarketData(id: Int): Unit = synchronized {
     reqHandler.remove(id).foreach { handler ⇒
       val marketDataHandler = handler.asInstanceOf[MarketDataHandler]
@@ -234,25 +267,33 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     tickPrice(tickerId, tickType, value, 0)
   }
 
+  // TODO
   override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {
     log.debug(s"tickString ${tickerId} ${tickType} ${value}")
   }
 
+  // TODO
   override def tickEFP(tickerId: Int, tickType: Int, basisPoints: Double, formattedBasisPoints: String,
     impliedFuture: Double, holdDays: Int, futureExpiry: String, dividendImpact: Double, dividendsToExpiry: Double
   ): Unit = {
     log.debug(s"tickEFP ${tickerId} ${tickType} ${basisPoints} ")
   }
 
-  override def tickSnapshotEnd(reqId: Int): Unit = {}
+  override def tickSnapshotEnd(reqId: Int): Unit = {
+    log.debug(s"tickSnapshotEnd ${reqId}")
+  }
 
   override def marketDataType(reqId: Int, marketDataType: Int): Unit = {
     log.debug(s"marketDataType ${reqId} ${marketDataType}")
-
   }
 
   /* orders ********************************************************************************/
 
+  /**
+   * Submit an order for the given contract
+   * @param contract
+   * @param order  @see [[Order]]
+   */
   def placeOrder(contract: Contract, order: Order): Unit = synchronized {
     val iBOrder = order.toIBOrder
     if (iBOrder.orderId() == 0) {
@@ -262,6 +303,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     eClientSocket.placeOrder(iBOrder.orderId(), contract, iBOrder)
   }
 
+  /**
+   * TODO FIXME
+   */
   def openOrders(): Unit = synchronized {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
@@ -282,11 +326,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     log.info(s"openOrderEnd")
   }
 
-  // nextValidId handled after connect up
-
   override def deltaNeutralValidation(reqId: Int, underComp: DeltaNeutralContract): Unit = {}
 
   /* account and portfolio ********************************************************************************/
+  // TODO
+
   override def updateAccountValue(key: String, value: String, currency: String, accountName: String): Unit = {}
 
   override def updatePortfolio(contract: Contract, position: Int, marketPrice: Double, marketValue: Double,
@@ -305,6 +349,10 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* Positions ********************************************************************************/
 
+  /**
+   * Request info about positions @see [[Position]]
+   * @return future of positions
+   */
   def positions(): Future[IndexedSeq[Position]] = synchronized {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
@@ -333,6 +381,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* contract details ********************************************************************************/
 
   /**
+   * Get [[ContractDetails]] for the given contract
    * @param contract
    * @return contract details for the given contract
    */
@@ -349,7 +398,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     promise.future
   }
 
-  /// EWrapper handlers
+  /// EWrapper handler
   override def contractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
     log.debug(s"contractDetails ${reqId}")
     reqHandler.get(reqId).foreach { x ⇒
@@ -358,7 +407,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
-  /// EWrapper handlers
+  /// EWrapper handler
   override def contractDetailsEnd(reqId: Int): Unit = {
     log.debug(s"contractDetailsEnd ${reqId}")
     reqHandler.remove(reqId).foreach { h ⇒
@@ -375,6 +424,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /* executions ********************************************************************************/
+  // TODO
 
   override def execDetails(reqId: Int, contract: Contract, execution: Execution): Unit = {}
 
@@ -383,6 +433,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   override def commissionReport(commissionReport: CommissionReport): Unit = {}
 
   /* market depth ********************************************************************************/
+  // TODO
 
   override def updateMktDepthL2(tickerId: Int, position: Int, marketMaker: String, operation: Int, side: Int,
     price: Double, size: Int
@@ -392,10 +443,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   ): Unit = {}
 
   /* news bulletins ********************************************************************************/
+  // TODO
 
   override def updateNewsBulletin(msgId: Int, msgType: Int, message: String, origExchange: String): Unit = {}
 
   /* financial advisors ********************************************************************************/
+  // TODO
 
   override def managedAccounts(accountsList: String): Unit = {}
 
@@ -404,7 +457,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* historical data ********************************************************************************/
 
   /**
-   * Request historical data for a given contract
+   * Request historical data for a given contract.
+   *
+   * This calls once to the underlying EClientSocket, meaning that not all combinations of durationUnit, barSize and duration
+   * are legal, plus history requests are limited by
+   * [[https://www.interactivebrokers.com/en/software/api/apiguide/tables/historical_data_limitations.htm]]
+   *
+   * @see [[com.larroy.ibclient.util.HistoryLimits]] to retrieve maximum duration for a given combination
+   *
    * @param contract
    * @param endDate format yyyymmdd hh:mm:ss tmz, where the time zone is allowed (optionally) after a space at the end.
    * @param duration number of durationUnit to request
@@ -414,7 +474,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @param whatToShow Determines the nature of data being extracted.
    *                   One of: [TRADES, MIDPOINT, BID, ASK] for realtime bars and [BID_ASK, HISTORICAL_VOLATILITY, OPTION_IMPLIED_VOLATILITY, YIELD_ASK, YIELD_BID, YIELD_BID_ASK, YIELD_LAST]
    * @param rthOnly only data from regular trading hours if true
-   * @return
+   * @return future of IndexedSeq of [[Bar]]
    */
   def historicalData(contract: Contract, endDate: String, duration: Int,
     durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean
@@ -464,6 +524,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
 
   /* market scanners ********************************************************************************/
+  // TODO
 
   override def scannerParameters(xml: String): Unit = {}
 
@@ -475,24 +536,28 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
 
   /* realtime bars ********************************************************************************/
+  // TODO
 
   override def realtimeBar(reqId: Int, time: Long, open: Double, high: Double, low: Double, close: Double, volume: Long,
     wap: Double, count: Int
   ): Unit = {}
 
   /* display groups ********************************************************************************/
+  // TODO
 
   override def displayGroupList(reqId: Int, groups: String): Unit = {}
 
   override def displayGroupUpdated(reqId: Int, contractInfo: String): Unit = {}
 
   /* ********************************************************************************/
+  // TODO
 
   override def verifyAndAuthMessageAPI(apiData: String, xyzChallange: String): Unit = {}
 
   override def verifyCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
 
   /* ********************************************************************************/
+  // TODO
 
   override def verifyAndAuthCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
 

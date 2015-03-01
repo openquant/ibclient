@@ -17,6 +17,13 @@ import net.ceedubs.ficus.Ficus._
 
 object HistoryLimits {
   private[this] val cfg = ConfigFactory.load().getConfig("ibclient.historyLimits")
+
+  /**
+   * @param durationUnit
+   * @param barSize
+   * @return the maximum number of bar (duration) that can be requested with the
+   *         given parameters or None if the combination is not valid.
+   */
   def apply(durationUnit: DurationUnit, barSize: BarSize): Option[Int] = {
     val path = s"${durationUnit.name}.${barSize.name}"
     cfg.as[Option[Int]](path)
