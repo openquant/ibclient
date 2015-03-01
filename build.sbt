@@ -34,7 +34,8 @@ libraryDependencies ++= {
     "org.xerial" % "sqlite-jdbc" % "3.8.7",
     "com.github.tototoshi" %% "scala-csv" % "1.1.2",
     "com.typesafe" % "config" % "1.2.1",
-    "io.reactivex" %% "rxscala" % "0.23.1"
+    "io.reactivex" %% "rxscala" % "0.23.1",
+    "com.google.guava" % "guava" % "18.0"
   )
 }
 
