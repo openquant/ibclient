@@ -1,0 +1,19 @@
+
+
+
+der] WARN  com.larroy.ibclient.IBClient - Warning -1 2104 Market data farm connection is OK:usfuture
+06:15:39.938 [EReader] ERROR com.larroy.ibclient.IBClient - Error requestId: -1 code: 1100 msg: Connectivity between IB and Trader Workstation has been lost.
+06:15:40.833 [EReader] ERROR com.larroy.ibclient.IBClient - Error requestId: -1 code: 1100 msg: Connectivity between IB and Trader Workstation has been lost.
+06:15:45.194 [EReader] ERROR com.larroy.ibclient.IBClient - Error requestId: -1 code: 1100 msg: Connectivity between IB and Trader Workstation has been lost.
+06:15:52.496 [EReader] ERROR com.larroy.ibclient.IBClient - Error requestId: -1 code: 1100 msg: Connectivity between IB and Trader Workstation has been lost.
+06:15:57.761 [EReader] ERROR com.larroy.ibclient.IBClient - Error requestId: -1 code: 1100 msg: Connectivity between IB and Trader Workstation has been lost.
+06:16:00.498 [EReader] ERROR com.larroy.ibclient.IBClient - Error requestId: -1 code: 1100 msg: Connectivity between IB and Trader Workstation has been lost.
+06:16:08.783 [EReader] WARN  com.larroy.ibclient.IBClient - Warning -1 2108 Market data farm connection is inactive but should be available upon demand.eufarm
+06:16:08.784 [EReader] WARN  com.larroy.ibclient.IBClient - Warning -1 2108 Market data farm connection is inactive but should be available upon demand.eufarm
+06:16:08.791 [EReader] WARN  com.larroy.ibclient.IBClient - Warning -1 2108 Market data farm connection is inactive but should be available upon demand.usfuture
+06:16:08.802 [EReader] WARN  com.larroy.ibclient.IBClient - Warning -1 2108 Market data farm connection is inactive but should be available upon demand.cashfarm
+06:16:08.803 [EReader] WARN  com.larroy.ibclient.IBClient - Warning -1 2108 Market data farm connection is inactive but should be available upon demand.usfuture
+06:16:08.803 [EReader] WARN  com.larroy.ibclient.IBClient - Warning -1 2108 Market data farm connection is inactive but should be available upon demand.cashfarm
+06:16:09.187 [EReader] ERROR com.larroy.ibclient.IBClient - Error requestId: -1 code: 1102 msg: Connectivity between IB and Trader Workstation has been restored - data maintained.
+06:16:09.513 [EReader] WARN  com.larroy.ibclient.IBClient - Warning -1 2103 Market data farm connection is broken:usfuture
+
