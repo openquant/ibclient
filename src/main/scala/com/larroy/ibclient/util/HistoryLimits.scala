@@ -4,7 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.ib.client.Types.{DurationUnit, BarSize, WhatToShow}
-import com.larroy.ibclient.IBClient
+import com.larroy.ibclient.{IBApiError, IBClient}
 import com.larroy.ibclient.contract.StockContract
 import com.typesafe.config.ConfigFactory
 import org.slf4j.{Logger, LoggerFactory}
@@ -28,8 +28,45 @@ object HistoryLimits {
     val path = s"${durationUnit.name}.${barSize.name}"
     cfg.as[Option[Int]](path)
   }
-  def bestDuration(startDate: Date, endDate: Date, barSize: BarSize): DurationUnit = {
-    DurationUnit.DAY
+  def bestDuration(startDate: Date, endDate: Date, barSize: BarSize): HistoryDuration = {
+    import org.joda.time._
+    val endDateTime = new DateTime(endDate)
+    val startDateTime = new DateTime(startDate)
+    val seconds =  Math.abs(Seconds.secondsBetween(startDateTime, endDateTime).getSeconds)
+
+    val secondsInDay = 24 * 60 * 60
+    val daysRem = if (seconds/secondsInDay > 1 && seconds % secondsInDay != 0) 1 else 0
+    val days = seconds / secondsInDay + daysRem
+
+    val secondsInWeek = 7 * secondsInDay
+    val weeksRem = if (seconds / secondsInWeek > 1 && seconds % secondsInWeek != 0) 1 else 0
+    val weeks = seconds / secondsInWeek + weeksRem
+
+    val secondsInMonth = 30 * secondsInDay
+    val monthsRem = if (seconds / secondsInMonth > 1 && seconds % secondsInMonth != 0) 1 else 0
+    val months = seconds / secondsInMonth + monthsRem
+
+    val secondsInYear = 365 * secondsInDay
+    val yearsRem = if (seconds / secondsInYear > 1 && seconds % secondsInYear != 0) 1 else 0
+    val years = seconds / secondsInYear
+
+    if (years == 0 && months == 0 && weeks == 0 && days == 0 && barSize.ordinal > BarSize._1_hour.ordinal)
+      new HistoryDuration(Math.max(days, 1), this(DurationUnit.DAY, barSize).getOrElse(1), DurationUnit.DAY)
+
+    else if (years == 0 && months == 0 && weeks == 0 && days <= 1 && barSize.ordinal < BarSize._1_day.ordinal)
+      new HistoryDuration(Math.max(seconds, 1), this(DurationUnit.SECOND, barSize).getOrElse(1), DurationUnit.SECOND)
+
+    else if (years == 0 && months == 0 && weeks == 0 || barSize.ordinal <= BarSize._5_mins.ordinal)
+      new HistoryDuration(Math.max(days, 1), this(DurationUnit.DAY, barSize).getOrElse(1), DurationUnit.DAY)
+
+    else if (years == 0 && months == 0 || barSize.ordinal <= BarSize._15_mins.ordinal)
+      new HistoryDuration(Math.max(weeks, 1), this(DurationUnit.WEEK, barSize).getOrElse(1), DurationUnit.WEEK)
+
+    else if (years == 0 || barSize.ordinal <= BarSize._1_hour.ordinal)
+      new HistoryDuration(Math.max(months, 1), this(DurationUnit.MONTH, barSize).getOrElse(1), DurationUnit.MONTH)
+
+    else
+      new HistoryDuration(Math.max(years, 1), this(DurationUnit.YEAR, barSize).getOrElse(1), DurationUnit.YEAR)
   }
 }
 
@@ -44,7 +81,7 @@ class HistoryLimits {
   private[this] val endDate = new Date()
   private[this] val contract = testStockContract
 
-  def testWaitDuration = Duration(cfg.getInt("tws.timeout_s"), SECONDS)
+  def testWaitDuration = scala.concurrent.duration.Duration(cfg.getInt("tws.timeout_s"), SECONDS)
 
   def testStockContract: StockContract = {
     new StockContract(
@@ -66,7 +103,7 @@ class HistoryLimits {
       durationUnit, barSize, WhatToShow.TRADES, false
     )
     Thread.sleep(16000)
-    Await.ready(futureBars, Duration.Inf).value match {
+    Await.ready(futureBars, scala.concurrent.duration.Duration.Inf).value match {
       case Some(Failure(e)) ⇒ {
         log.debug(s"fail")
         false
