@@ -36,7 +36,8 @@ libraryDependencies ++= {
     "com.typesafe" % "config" % "1.2.1",
     "net.ceedubs" %% "ficus" % "1.1.2",
     "io.reactivex" %% "rxscala" % "0.23.1",
-    "com.google.guava" % "guava" % "18.0"
+    "com.google.guava" % "guava" % "18.0",
+    "joda-time" % "joda-time" % "2.7"
   )
 }
 

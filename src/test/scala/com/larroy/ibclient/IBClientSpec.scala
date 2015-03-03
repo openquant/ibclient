@@ -49,8 +49,7 @@ class IBClientSpec extends Specification {
 
     "historical data" in {
       val stockContract = testStockContract
-      val endDate = new SimpleDateFormat("yyyyMMdd hh:mm:ss").format(new Date())
-      val res = ibclient.historicalData(stockContract, endDate, 10,
+      val res = ibclient.historicalData(stockContract, new Date(), 10,
         DurationUnit.DAY, BarSize._1_hour, WhatToShow.MIDPOINT, false
       )
       val hist = Await.result(res, testWaitDuration)

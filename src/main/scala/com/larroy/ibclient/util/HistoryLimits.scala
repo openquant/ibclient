@@ -38,7 +38,7 @@ class HistoryLimits {
   private[this] val log: Logger = LoggerFactory.getLogger(this.getClass)
   private[this] val cfg = ConfigFactory.load().getConfig("ibclient.test")
   private[this] val ibclient = connectedClient
-  private[this] val endDate = new SimpleDateFormat("yyyyMMdd hh:mm:ss").format(new Date())
+  private[this] val endDate = new Date()
   private[this] val contract = testStockContract
 
   def testWaitDuration = Duration(cfg.getInt("tws.timeout_s"), SECONDS)

@@ -222,7 +222,7 @@ object Main {
     println(cd)
     */
 
-    val res = ibclient.historicalData(contract, options.historyEndDate, options.historyDuration,
+    val res = ibclient.historicalData(contract, new Date(), options.historyDuration,
       options.historyDurationUnit, options.historyBarSize, WhatToShow.MIDPOINT, false
     )
     val hist = Await.result(res, Duration.Inf)

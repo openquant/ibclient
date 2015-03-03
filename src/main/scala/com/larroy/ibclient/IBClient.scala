@@ -6,26 +6,13 @@ import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
 import com.larroy.ibclient.handler._
 import com.larroy.ibclient.order.Order
+import org.joda.time.format.DateTimeFormat
+import org.joda.time.{DateTimeZone, DateTime}
 
 import org.slf4j.{Logger, LoggerFactory}
 import rx.lang.scala.subjects.PublishSubject
 import scala.collection.mutable
 import scala.concurrent.{Promise, Future}
-
-object IBClient {
-  def dateEpoch_s(date: String): Long = {
-    if (date.length() == 8) {
-      val year = date.substring(0, 4).toInt
-      val month = date.substring(4, 6).toInt
-      val day = date.substring(6).toInt
-      val cal = Calendar.getInstance()
-      cal.set(year, month, day)
-      cal.getTime().getTime() / 1000
-    } else
-      date.toLong
-  }
-}
-
 
 /**
  * @param host host where TWS is running
@@ -455,6 +442,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   override def receiveFA(faDataType: Int, xml: String): Unit = {}
 
   /* historical data ********************************************************************************/
+  //def easyHistoricalData(contract: Contract,
+
 
   /**
    * Request historical data for a given contract.
@@ -466,7 +455,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @see [[com.larroy.ibclient.util.HistoryLimits]] to retrieve maximum duration for a given combination
    *
    * @param contract
-   * @param endDate format yyyymmdd hh:mm:ss tmz, where the time zone is allowed (optionally) after a space at the end.
+   * @param endDate
    * @param duration number of durationUnit to request
    * @param durationUnit time span the request will cover one of [SECOND, DAY, WEEK, MONTH, YEAR] see [[DurationUnit]]
    * @param barSize  span of tone bar
@@ -476,7 +465,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @param rthOnly only data from regular trading hours if true
    * @return future of IndexedSeq of [[Bar]]
    */
-  def historicalData(contract: Contract, endDate: String, duration: Int,
+  def historicalData(contract: Contract, endDate: Date, duration: Int,
     durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean
   ): Future[IndexedSeq[Bar]] = synchronized {
     if (!eClientSocket.isConnected)
@@ -489,7 +478,10 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
     val durationStr = duration + " " + durationUnit.toString().charAt(0)
     log.debug(s"reqHistoricalData ${reqId}")
-    eClientSocket.reqHistoricalData(reqId, contract, endDate, durationStr, barSize.toString, whatToShow.toString,
+    val dateTime = new DateTime(endDate, DateTimeZone.UTC)
+    // format yyyymmdd hh:mm:ss tmz, where the time zone is allowed (optionally) after a space at the end.
+    val dateStr = DateTimeFormat.forPattern("yyyyMMdd hh:mm:ss z").print(dateTime)
+    eClientSocket.reqHistoricalData(reqId, contract, dateStr, durationStr, barSize.toString, whatToShow.toString,
       if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue]
     )
 
@@ -516,8 +508,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         }
         reqHandler.remove(reqId)
       } else {
-        val longDate = IBClient.dateEpoch_s(date)
-        handler.queue += new Bar(longDate, high, low, open, close, volume, count, wap, hasGaps)
+        handler.queue += new Bar(date.toLong, high, low, open, close, volume, count, wap, hasGaps)
       }
     }
   }
