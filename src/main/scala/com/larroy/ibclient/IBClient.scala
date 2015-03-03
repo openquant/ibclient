@@ -15,13 +15,13 @@ import scala.collection.mutable
 import scala.concurrent.{Promise, Future}
 
 /**
- * @param host host where TWS is running
- * @param port port configured in TWS API settings
- * @param clientId an integer to identify this client, a duplicated clientId will cause an error on connect
- *
  * The API is fully asynchronous and thread safe.
  * Most of the calls return a Future of the desired result that is eventually completed sucessfully or with
  * an error describing the problem.
+ *
+ * @param host host where TWS is running
+ * @param port port configured in TWS API settings
+ * @param clientId an integer to identify this client, a duplicated clientId will cause an error on connect
  */
 class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrapper {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
@@ -49,8 +49,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    *
    * @example
    * {{{
-   *       val ibclient = new IBClient("localhost", 7496, 1)
-   *       val connected = Await.result(ibclient.connect(), testWaitDuration)
+   *        val ibclient = new IBClient("localhost", 7496, 1)
+   *        val connected = Await.result(ibclient.connect(), testWaitDuration)
    * }}}
    */
   def connect(): Future[Boolean] = synchronized {
@@ -214,8 +214,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * Close a market data line
-   * @param id id of the [[MarketDataSubscription]]
    * if there's no subscription with the given id this call has no effect
+   *
+   * @param id id of the [[MarketDataSubscription]]
    */
   def closeMarketData(id: Int): Unit = synchronized {
     reqHandler.remove(id).foreach { handler ⇒
@@ -305,7 +306,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     log.info(s"OrderStatus ${orderId} ${status}")
   }
 
-  override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = synchronized {
+  override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = synchronized
+  {
     log.info(s"openOrder ${orderId} ${contract} ${orderState}")
   }
 
@@ -442,7 +444,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   override def receiveFA(faDataType: Int, xml: String): Unit = {}
 
   /* historical data ********************************************************************************/
-  //def easyHistoricalData(contract: Contract,
+  /*
+  def easyHistoricalData(contract: Contract, startDate: Date, endDate: Date, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean): Future[IndexedSeq[Bar]] = synchronized {
+
+  }
+  */
 
 
   /**
@@ -498,7 +504,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     wap: Double,
     hasGaps: Boolean
   ): Unit = {
-    //log.debug(s"historicalData ${reqId}")
+    /*  Even though we specify formatDate as 2 which accordint to the API should always return seconds since the epoch it's not respected
+        When asking for DurationUnit.DAY and BarSize._1_day  we get dates in yyyyymmdd format
+     */
+
+    log.debug(s"historicalData ${reqId} ${date}")
     reqHandler.get(reqId).foreach { x =>
       val handler = x.asInstanceOf[HistoricalDataHandler]
       if (date.startsWith("finished")) {
@@ -508,7 +518,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         }
         reqHandler.remove(reqId)
       } else {
-        handler.queue += new Bar(date.toLong, high, low, open, close, volume, count, wap, hasGaps)
+        handler.queue += new Bar(util.dateEpoch_s(date), high, low, open, close, volume, count, wap, hasGaps)
       }
     }
   }

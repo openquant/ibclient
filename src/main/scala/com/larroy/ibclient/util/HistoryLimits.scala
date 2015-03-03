@@ -28,6 +28,9 @@ object HistoryLimits {
     val path = s"${durationUnit.name}.${barSize.name}"
     cfg.as[Option[Int]](path)
   }
+  def bestDuration(startDate: Date, endDate: Date, barSize: BarSize): DurationUnit = {
+    DurationUnit.DAY
+  }
 }
 
 /**
