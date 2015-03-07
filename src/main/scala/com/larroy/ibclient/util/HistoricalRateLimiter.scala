@@ -37,7 +37,7 @@ class HistoricalRateLimiter {
    * @param request
    * @param reftime_ms
    */
-  def requested(request: HistoricalRequest, reftime_ms: Long = now_ms): Unit = {
+  def requested(request: HistoricalRequest, reftime_ms: Long = now_ms): Unit = synchronized {
     requests.put(reftime_ms, request)
   }
 
@@ -64,7 +64,7 @@ class HistoricalRateLimiter {
    * @param reftime_ms the reference time, what is considered "now", defaults to the current time
    * @return minimum milliseconds to wait after we can make the next request without violating the limits
    */
-  def nextRequestAfter_ms(request: HistoricalRequest, reftime_ms: Long = now_ms): Long = {
+  def nextRequestAfter_ms(request: HistoricalRequest, reftime_ms: Long = now_ms): Long = synchronized {
     var after_ms = 0L
     // Rate limit on restriction 1
     // this is conservative as some arguments might make a different request, but it's tricky (BID_ASK for example counts as two)
@@ -84,7 +84,7 @@ class HistoricalRateLimiter {
     after_ms
   }
 
-  def cleanupAfter(time_ms: Long): Unit = {
+  def cleanupAfter(time_ms: Long): Unit = synchronized {
     val expired = requests.keys.filter { x ⇒ x < time_ms }
     expired.foreach { key ⇒
       requests.removeAll(key)

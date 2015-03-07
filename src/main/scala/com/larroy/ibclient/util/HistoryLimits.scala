@@ -35,20 +35,16 @@ object HistoryLimits {
     val seconds =  Math.abs(Seconds.secondsBetween(startDateTime, endDateTime).getSeconds)
 
     val secondsInDay = 24 * 60 * 60
-    val daysRem = if (seconds/secondsInDay > 0 && seconds % secondsInDay != 0) 1 else 0
-    val days = seconds / secondsInDay + daysRem
+    val days = divRoundAwayZero(seconds, secondsInDay)
 
     val secondsInWeek = 7 * secondsInDay
-    val weeksRem = if (seconds / secondsInWeek > 0 && seconds % secondsInWeek != 0) 1 else 0
-    val weeks = seconds / secondsInWeek + weeksRem
+    val weeks = divRoundAwayZero(seconds, secondsInWeek)
 
     val secondsInMonth = 30 * secondsInDay
-    val monthsRem = if (seconds / secondsInMonth > 0 && seconds % secondsInMonth != 0) 1 else 0
-    val months = seconds / secondsInMonth + monthsRem
+    val months = divRoundAwayZero(seconds, secondsInMonth)
 
     val secondsInYear = 365 * secondsInDay
-    val yearsRem = if (seconds / secondsInYear > 0 && seconds % secondsInYear != 0) 1 else 0
-    val years = seconds / secondsInYear
+    val years = divRoundAwayZero(seconds, secondsInYear)
 
     if (years == 0 && months == 0 && weeks == 0 && days == 0 && barSize.ordinal > BarSize._1_hour.ordinal)
       new HistoryDuration(Math.max(days, 1), this(DurationUnit.DAY, barSize).getOrElse(1), DurationUnit.DAY)

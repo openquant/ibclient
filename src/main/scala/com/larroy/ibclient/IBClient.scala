@@ -6,13 +6,14 @@ import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
 import com.larroy.ibclient.handler._
 import com.larroy.ibclient.order.Order
+import com.larroy.ibclient.util.{HistoricalRequest, HistoricalRateLimiter, HistoryLimits}
 import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTimeZone, DateTime}
 
 import org.slf4j.{Logger, LoggerFactory}
 import rx.lang.scala.subjects.PublishSubject
 import scala.collection.mutable
-import scala.concurrent.{Promise, Future}
+import scala.concurrent.{ExecutionContext, Promise, Future}
 
 /**
  * The API is fully asynchronous and thread safe.
@@ -43,6 +44,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   private[this] var positionsPromise: Option[Promise[IndexedSeq[Position]]] = None
   private[this] var positionHandler: Option[PositionHandler] = None
 
+  val historicalRateLimiter = new HistoricalRateLimiter
+
   /**
    * @return A Future[Boolean] that is completed once the client is connected and set to true. If it can't connect
    *         it will be set to false
@@ -59,6 +62,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       Future.successful[Boolean](true)
     } else {
       eClientSocket.eConnect(host, port, clientId)
+      connectResult = Promise[Boolean]()
       connectResult.future
     }
   }
@@ -444,11 +448,63 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   override def receiveFA(faDataType: Int, xml: String): Unit = {}
 
   /* historical data ********************************************************************************/
-  /*
-  def easyHistoricalData(contract: Contract, startDate: Date, endDate: Date, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean): Future[IndexedSeq[Bar]] = synchronized {
+  def easyHistoricalData(
+    contract: Contract,
+    startDate: Date,
+    endDate: Date,
+    barSize: BarSize,
+    whatToShow: WhatToShow,
+    rthOnly: Boolean)
+      (implicit ctx: ExecutionContext): Future[IndexedSeq[IndexedSeq[Bar]]] = synchronized
+  {
+    import org.joda.time._
+    import com.ib.client.Types.DurationUnit._
+    val historyDuration = HistoryLimits.bestDuration(startDate, endDate, barSize)
+    def minusDuration(dateTime: DateTime, amt: Int, durationUnit: DurationUnit): DateTime = durationUnit match {
+      case SECOND ⇒ dateTime.minusSeconds(amt)
+      case DAY ⇒ dateTime.minusDays(amt)
+      case WEEK ⇒ dateTime.minusWeeks(amt)
+      case MONTH ⇒ dateTime.minusMonths(amt)
+      case YEAR ⇒ dateTime.minusYears(amt)
+    }
+    val requests = util.divRoundAwayZero(historyDuration.total, historyDuration.eachRequest)
+    val endDateTime = new DateTime(endDate)
+    val durationUnit = historyDuration.durationUnit
 
+    // present first, past last
+    val endDates = Vector.tabulate(requests){ reqNum ⇒
+      minusDuration(endDateTime, reqNum * historyDuration.eachRequest, durationUnit).toDate
+    }
+
+    val durations = Vector.tabulate(requests){ reqNum ⇒
+      if (reqNum == requests - 1)
+        historyDuration.total % historyDuration.eachRequest
+      else
+        historyDuration.eachRequest
+    }
+
+    def throttledRequest(endDate: Date, duration: Int): Future[IndexedSeq[Bar]] = {
+      val request = new HistoricalRequest(contract.symbol, contract.exchange, durationUnit, barSize, duration)
+      val nextAfter_ms = historicalRateLimiter.nextRequestAfter_ms(request)
+      if (nextAfter_ms > 0) {
+        util.defer(nextAfter_ms) {
+          val res = historicalData(contract, endDate, duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly)
+          historicalRateLimiter.requested(request)
+          res
+        }(ctx).flatMap(identity)
+      } else {
+        val res = historicalData(contract, endDate, duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly)
+        historicalRateLimiter.requested(request)
+        res
+      }
+    }
+
+    val partialResults: Vector[Future[IndexedSeq[Bar]]] = endDates.zip(durations).map { x ⇒ throttledRequest(x._1, x._2) }
+    historicalRateLimiter.cleanup()
+
+    val result = Future.sequence(partialResults)
+    result
   }
-  */
 
 
   /**
