@@ -25,6 +25,7 @@ class HistoryLimitsSpec extends Specification {
       HistoryLimits.bestDuration(toDate("20150301 09:00:00"), toDate("20150303 09:00:00"), BarSize._1_day) shouldEqual new HistoryDuration(2,60, DurationUnit.DAY)
       HistoryLimits.bestDuration(toDate("20150203 09:00:00"), toDate("20150303 09:00:00"), BarSize._1_day) shouldEqual new HistoryDuration(4, 52, DurationUnit.WEEK)
       HistoryLimits.bestDuration(toDate("20150201 09:00:00"), toDate("20150303 09:00:00"), BarSize._1_day) shouldEqual new HistoryDuration(1, 12, DurationUnit.MONTH)
+      HistoryLimits.bestDuration(toDate("20150131 09:00:00"), toDate("20150303 09:00:00"), BarSize._1_day) shouldEqual new HistoryDuration(2, 12, DurationUnit.MONTH)
     }
   }
 }
