@@ -448,6 +448,26 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   override def receiveFA(faDataType: Int, xml: String): Unit = {}
 
   /* historical data ********************************************************************************/
+  /**
+   * Retrieve historical data between two dates respecting ib rate limitations:
+   * https://www.interactivebrokers.com/en/software/api/apiguide/tables/historical_data_limitations.htm
+   *
+   * The request is translated internally to potentially several historicalData requests and the future result is fullfilled
+   * on successful completion.
+   *
+   * If any request fails, the result is a failed future.
+   *
+   * @param contract
+   * @param startDate
+   * @param endDate
+   * @param barSize  span of tone bar
+   *                 one of [_1_secs, _5_secs, _10_secs, _15_secs, _30_secs, _1_min, _2_mins, _3_mins, _5_mins, _10_mins, _15_mins, _20_mins, _30_mins, _1_hour, _4_hours, _1_day, _1_week]
+   * @param whatToShow Determines the nature of data being extracted.
+   *                   One of: [TRADES, MIDPOINT, BID, ASK] for realtime bars and [BID_ASK, HISTORICAL_VOLATILITY, OPTION_IMPLIED_VOLATILITY, YIELD_ASK, YIELD_BID, YIELD_BID_ASK, YIELD_LAST]
+   * @param rthOnly only data from regular trading hours if true
+   * @param ctx execution context where futures for intermediate requests are scheduled when they have to be deferred
+   * @return
+   */
   def easyHistoricalData(
     contract: Contract,
     startDate: Date,
