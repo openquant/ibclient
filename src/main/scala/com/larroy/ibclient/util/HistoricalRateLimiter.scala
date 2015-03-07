@@ -7,7 +7,17 @@ import scala.collection.JavaConversions._
 
 
 /**
+ * Stateful utility to account for historical requests in order no to violate historical data limitations as specified in:
+ * https://www.interactivebrokers.com/en/software/api/apiguide/tables/historical_data_limitations.htm
+ *
+ * The basic usage is done through the following calls:
+ *
+ * Requests should be accounted for with the "requested" method
+ * nextRequestAfter_ms gives us the wait time until the next request can be made
+ * cleanup will free the accounting of old requests, should be called periodically
+ *
  * @author piotr 01.03.15
+ * Limitations:
  *         1. Making identical historical data requests within 15 seconds;
  *         2. Making six or more historical data requests for the same Contract, Exchange and Tick Type within two seconds.
  *         3. Do not make more than 60 historical data requests in any ten-minute period.
@@ -22,15 +32,20 @@ class HistoricalRateLimiter {
 
   def now_ms: Long = Calendar.getInstance().getTimeInMillis()
 
+  /**
+   * Account for an historical request in this rate limiter
+   * @param request
+   * @param reftime_ms
+   */
   def requested(request: HistoricalRequest, reftime_ms: Long = now_ms): Unit = {
     requests.put(reftime_ms, request)
   }
 
-  def latestInLast(timeframe_ms: Long, reftime_ms: Long = now_ms): Iterator[java.util.Map.Entry[Long, HistoricalRequest]] = {
+  protected def latestInLast(timeframe_ms: Long, reftime_ms: Long = now_ms): Iterator[java.util.Map.Entry[Long, HistoricalRequest]] = {
     requests.entries.iterator.takeWhile { x ⇒ x.getKey > reftime_ms - timeframe_ms}
   }
 
-  def nextSlot_ms(timeframe_ms: Long, numRequests: Int, filter: Option[(HistoricalRequest) ⇒ Boolean] = None, reftime_ms: Long = now_ms): Long = {
+  protected def nextSlot_ms(timeframe_ms: Long, numRequests: Int, filter: Option[(HistoricalRequest) ⇒ Boolean] = None, reftime_ms: Long = now_ms): Long = {
     val latest = if (filter.isEmpty)
       latestInLast(timeframe_ms, reftime_ms).toVector
     else
@@ -44,6 +59,11 @@ class HistoricalRateLimiter {
     0L
   }
 
+  /**
+   * @param request type of request that we want to make
+   * @param reftime_ms the reference time, what is considered "now", defaults to the current time
+   * @return minimum milliseconds to wait after we can make the next request without violating the limits
+   */
   def nextRequestAfter_ms(request: HistoricalRequest, reftime_ms: Long = now_ms): Long = {
     var after_ms = 0L
     // Rate limit on restriction 1
