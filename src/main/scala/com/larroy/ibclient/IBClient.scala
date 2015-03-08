@@ -476,7 +476,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     barSize: BarSize,
     whatToShow: WhatToShow,
     rthOnly: Boolean = false)
-      (implicit ctx: ExecutionContext): Future[IndexedSeq[IndexedSeq[Bar]]] = synchronized
+      (implicit ctx: ExecutionContext): Future[IndexedSeq[Bar]] = synchronized
   {
     val historyDuration = HistoryLimits.bestDuration(startDate, endDate, barSize)
     val durationUnit = historyDuration.durationUnit
@@ -505,7 +505,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val partialResults: Vector[Future[IndexedSeq[Bar]]] = historyDuration.endDates(endDate).zip(historyDuration.durations).map { x ⇒ throttledRequest(x._1, x._2) }
     historicalRateLimiter.cleanup()
 
-    val result = Future.sequence(partialResults)
+    val result = Future.sequence(partialResults).map { x ⇒ x.flatMap(identity) }
     result
   }
 
