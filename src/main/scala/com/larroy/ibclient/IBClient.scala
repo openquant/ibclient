@@ -1,6 +1,6 @@
 package com.larroy.ibclient
 
-import java.util.{Collections, Calendar, Date}
+import java.util.{Collections, Date}
 
 import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
@@ -474,7 +474,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     endDate: Date,
     barSize: BarSize,
     whatToShow: WhatToShow,
-    rthOnly: Boolean)
+    rthOnly: Boolean = false)
       (implicit ctx: ExecutionContext): Future[IndexedSeq[IndexedSeq[Bar]]] = synchronized
   {
     import org.joda.time._
@@ -497,22 +497,26 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
 
     val durations = Vector.tabulate(requests){ reqNum ⇒
-      if (reqNum == requests - 1)
-        historyDuration.total % historyDuration.eachRequest
+      val rem = historyDuration.total % historyDuration.eachRequest
+      if (reqNum == requests - 1 && rem != 0)
+        rem
       else
         historyDuration.eachRequest
     }
+    durations.foreach { x ⇒ assert(x != 0, "calculated duration can't be 0") }
 
     def throttledRequest(endDate: Date, duration: Int): Future[IndexedSeq[Bar]] = {
       val request = new HistoricalRequest(contract.symbol, contract.exchange, durationUnit, barSize, duration)
       val nextAfter_ms = historicalRateLimiter.nextRequestAfter_ms(request)
       if (nextAfter_ms > 0) {
         util.defer(nextAfter_ms) {
+          log.debug(s"historicalData (deferred ${nextAfter_ms}) ${contract.symbol} ${duration} ${historyDuration.durationUnit} ${barSize}")
           val res = historicalData(contract, endDate, duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly)
           historicalRateLimiter.requested(request)
           res
         }(ctx).flatMap(identity)
       } else {
+        log.debug(s"historicalData ${contract.symbol} ${duration} ${historyDuration.durationUnit} ${barSize}")
         val res = historicalData(contract, endDate, duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly)
         historicalRateLimiter.requested(request)
         res
@@ -584,7 +588,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         When asking for DurationUnit.DAY and BarSize._1_day  we get dates in yyyyymmdd format
      */
 
-    log.debug(s"historicalData ${reqId} ${date}")
+    //log.debug(s"historicalData ${reqId} ${date}")
     reqHandler.get(reqId).foreach { x =>
       val handler = x.asInstanceOf[HistoricalDataHandler]
       if (date.startsWith("finished")) {

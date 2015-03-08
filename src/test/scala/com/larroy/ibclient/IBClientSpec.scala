@@ -56,6 +56,16 @@ class IBClientSpec extends Specification {
       hist must not be empty
     }
 
+    "easy historical data" in {
+      import org.joda.time._
+      val stockContract = testStockContract
+      val startDate = new DateTime(2015, 3, 1, 15, 0).toDate
+      val endDate = new DateTime(2015, 3, 3, 15, 0).toDate
+      val res = ibclient.easyHistoricalData(stockContract, startDate, endDate, BarSize._1_min, WhatToShow.TRADES)
+      val hist = Await.result(res, testWaitDuration)
+      hist must not be empty
+    }
+
     "market data" in {
       val result = ArrayBuffer.empty[Tick]
       val subscription = ibclient.marketData(new CashContract("EUR", "EUR.USD"))
