@@ -508,19 +508,21 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
     def throttledRequest(endDate: Date, duration: Int): Future[IndexedSeq[Bar]] = {
       val request = new HistoricalRequest(contract.symbol, contract.exchange, durationUnit, barSize, duration)
+      def doRequest = {
+        val res = historicalData(contract, endDate, duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly, false)
+        historicalRateLimiter.requested(request)
+        res
+      }
+
       val nextAfter_ms = historicalRateLimiter.nextRequestAfter_ms(request)
       if (nextAfter_ms > 0) {
         util.defer(nextAfter_ms) {
           log.debug(s"historicalData (deferred ${nextAfter_ms}) ${contract.symbol} ${duration} ${historyDuration.durationUnit} ${barSize}")
-          val res = historicalData(contract, endDate, duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly)
-          historicalRateLimiter.requested(request)
-          res
+          doRequest
         }(ctx).flatMap(identity)
       } else {
         log.debug(s"historicalData ${contract.symbol} ${duration} ${historyDuration.durationUnit} ${barSize}")
-        val res = historicalData(contract, endDate, duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly)
-        historicalRateLimiter.requested(request)
-        res
+        doRequest
       }
     }
 
@@ -550,10 +552,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @param whatToShow Determines the nature of data being extracted.
    *                   One of: [TRADES, MIDPOINT, BID, ASK] for realtime bars and [BID_ASK, HISTORICAL_VOLATILITY, OPTION_IMPLIED_VOLATILITY, YIELD_ASK, YIELD_BID, YIELD_BID_ASK, YIELD_LAST]
    * @param rthOnly only data from regular trading hours if true
+   * @param rateLimit set to false to skip rate limiting **warning** this can cause pacing violation errors
    * @return future of IndexedSeq of [[Bar]]
    */
   def historicalData(contract: Contract, endDate: Date, duration: Int,
-    durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean
+    durationUnit: DurationUnit, barSize: BarSize, whatToShow: WhatToShow, rthOnly: Boolean = false, rateLimit: Boolean = true
   ): Future[IndexedSeq[Bar]] = synchronized {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
@@ -573,17 +576,24 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       log.debug(s"reqHistoricalData reqId: ${reqId} symbol: ${contract.symbol} duration: ${duration} barSize: ${barSize}")
       eClientSocket.reqHistoricalData(reqId, contract, dateStr, durationStr, barSize.toString, whatToShow.toString,
         if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue])
-      historicalRateLimiter.requested(request)
     }
 
-    val nextAfter_ms = historicalRateLimiter.nextRequestAfter_ms(request)
-    if (nextAfter_ms > 0) {
-      log.debug(s"rate limiting historicalData, deferring ${nextAfter_ms} ms")
-      util.defer(nextAfter_ms) {
+    if (rateLimit) {
+      val nextAfter_ms = historicalRateLimiter.nextRequestAfter_ms(request)
+      if (nextAfter_ms > 0) {
+        log.debug(s"rate limiting historicalData, deferring ${nextAfter_ms} ms")
+        util.defer(nextAfter_ms) {
+          doRequest
+          historicalRateLimiter.requested(request)
+        }(ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor()))
+      } else {
         doRequest
-      }(ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor()))
-    } else
+        historicalRateLimiter.requested(request)
+      }
+      historicalRateLimiter.cleanup()
+    } else {
       doRequest
+    }
 
     promise.future
   }
