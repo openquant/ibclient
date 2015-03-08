@@ -45,7 +45,7 @@ class HistoricalRateLimiter {
     requests.entries.iterator.takeWhile { x ⇒ x.getKey > reftime_ms - timeframe_ms}
   }
 
-  protected def nextSlot_ms(timeframe_ms: Long, numRequests: Int, filter: Option[(HistoricalRequest) ⇒ Boolean] = None, reftime_ms: Long = now_ms): Long = {
+  def nextSlot_ms(timeframe_ms: Long, numRequests: Int, filter: Option[(HistoricalRequest) ⇒ Boolean] = None, reftime_ms: Long = now_ms): Long = {
     val latest = if (filter.isEmpty)
       latestInLast(timeframe_ms, reftime_ms).toVector
     else

@@ -1,5 +1,6 @@
 package com.larroy.ibclient
 
+import java.util.concurrent.Executors
 import java.util.{Collections, Date}
 
 import com.ib.client.Types._
@@ -563,13 +564,23 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     reqPromise += (reqId → promise)
 
     val durationStr = duration + " " + durationUnit.toString().charAt(0)
-    log.debug(s"reqHistoricalData ${reqId}")
+    log.debug(s"reqHistoricalData reqId: ${reqId} symbol: ${contract.symbol} duration: ${duration} barSize: ${barSize}")
     val dateTime = new DateTime(endDate, DateTimeZone.UTC)
     // format yyyymmdd hh:mm:ss tmz, where the time zone is allowed (optionally) after a space at the end.
     val dateStr = DateTimeFormat.forPattern("yyyyMMdd hh:mm:ss z").print(dateTime)
-    eClientSocket.reqHistoricalData(reqId, contract, dateStr, durationStr, barSize.toString, whatToShow.toString,
-      if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue]
-    )
+    val request = new HistoricalRequest(contract.symbol, contract.exchange, durationUnit, barSize, duration)
+
+    def doRequest = {
+      eClientSocket.reqHistoricalData(reqId, contract, dateStr, durationStr, barSize.toString, whatToShow.toString,
+        if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue])
+      historicalRateLimiter.requested(request)
+    }
+
+    val nextAfter_ms = historicalRateLimiter.nextRequestAfter_ms(request)
+    if (nextAfter_ms > 0)
+      util.defer(nextAfter_ms) { doRequest }(ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor()))
+    else
+      doRequest
 
     promise.future
   }
