@@ -6,7 +6,7 @@ org.scalastyle.sbt.ScalastylePlugin.Settings
 
 name := "ibclient"
 
-version := "0.2"
+version := "0.2.0-SNAPSHOT"
 
 organization := "com.larroy"
 
