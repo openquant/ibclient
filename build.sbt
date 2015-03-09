@@ -20,7 +20,7 @@ resolvers += "version99 Empty loggers" at "http://version99.qos.ch"
 libraryDependencies ++= {
   Seq(
     "org.specs2" %% "specs2" % "2.3.12" % "test",
-    "com.github.seratch" %% "awscala" % "0.2.+" excludeAll(ExclusionRule(organization= "org.apache.commons.logging")),
+    "com.github.seratch" %% "awscala" % "0.2.+" excludeAll(ExclusionRule(organization= "org.apache.commons.logging", name="commons-logging")),
     "com.github.scopt" %% "scopt" % "3.2.0",
     "org.slf4j" % "jcl-over-slf4j" % "1.7.7",
     "commons-logging" % "commons-logging" % "99-empty",
