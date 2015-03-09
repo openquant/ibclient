@@ -19,3 +19,7 @@ import java.text.SimpleDateFormat
     val ibclient = new IBClient(cfg.getString("tws.host"), cfg.getInt("tws.port"), cfg.getInt("tws.clientId"))
     Await.result(ibclient.connect(), Duration.Inf)
 
+
+ java -cp "target/scala-2.11/ibclient-assembly-0.1.jar":jython-standalone-2.7-b4.jar
+ org.python.util.jython
+
