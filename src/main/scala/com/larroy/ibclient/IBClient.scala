@@ -171,7 +171,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * Request fundamentals
    * @param contract
    * @param typ any of ReportSnapshot, ReportsFinSummary, ReportRatios, ReportsFinStatements, RESC, CalendarReport
-   * @see [[FundamentalType]]
    * @return a future string, completed with the data
    */
   def fundamentals(contract: Contract, typ: FundamentalType): Future[String] = synchronized {
@@ -285,7 +284,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /**
    * Submit an order for the given contract
    * @param contract
-   * @param order  @see [[Order]]
+   * @param order  @see [[order.Order]]
    */
   def placeOrder(contract: Contract, order: Order): Unit = synchronized {
     val iBOrder = order.toIBOrder
@@ -375,7 +374,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* contract details ********************************************************************************/
 
   /**
-   * Get [[ContractDetails]] for the given contract
+   * Get [[ib.client.ContractDetails]] for the given contract
    * @param contract
    * @return contract details for the given contract
    */
@@ -517,12 +516,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * are legal, plus history requests are limited by
    * [[https://www.interactivebrokers.com/en/software/api/apiguide/tables/historical_data_limitations.htm]]
    *
-   * @see [[com.larroy.ibclient.util.HistoryLimits]] to retrieve maximum duration for a given combination
+   * @see [[util.HistoryLimits]] to retrieve maximum duration for a given combination
    *
    * @param contract
    * @param endDate
    * @param duration number of durationUnit to request
-   * @param durationUnit time span the request will cover one of [SECOND, DAY, WEEK, MONTH, YEAR] see [[DurationUnit]]
+   * @param durationUnit time span the request will cover one of [SECOND, DAY, WEEK, MONTH, YEAR] see com.ib.client.Types.DurationUnit
    * @param barSize  span of tone bar
    *                 one of [_1_secs, _5_secs, _10_secs, _15_secs, _30_secs, _1_min, _2_mins, _3_mins, _5_mins, _10_mins, _15_mins, _20_mins, _30_mins, _1_hour, _4_hours, _1_day, _1_week]
    * @param whatToShow Determines the nature of data being extracted.
