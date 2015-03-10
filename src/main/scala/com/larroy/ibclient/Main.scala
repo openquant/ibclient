@@ -5,7 +5,9 @@ import java.util.Date
 
 import com.ib.client.Contract
 import com.ib.client.Types.{WhatToShow, BarSize, DurationUnit, SecType}
-import com.larroy.ibclient.contract.{FutureContract, StockContract}
+import com.larroy.ibclient.contract.{CashContract, FutureContract, StockContract}
+import org.joda.time.{DateTimeZone, DateTime}
+import org.joda.time.format.DateTimeFormat
 import org.slf4j.{Logger, LoggerFactory}
 //import rx.schedulers.Schedulers
 
@@ -23,30 +25,35 @@ import Mode._
 sealed case class Options(
   host: String = "localhost",
   port: Int = 7496,
+  clientId: Int = 1,
   mode: Mode = Mode.Invalid,
   quiet: Boolean = false,
-  contract: Option[String] = None,
+  contract: String = "",
+  localSymbol: Option[String] = None,
   contractType: SecType = SecType.valueOf("STK"),
   contractExchange: String = "SMART",
   contractCurrency: String = "USD",
   contractExpiry: String = "",
-  historyDuration: Int = 10,
   historyDurationUnit: DurationUnit = DurationUnit.DAY,
-  historyBarSize: BarSize = BarSize._1_hour,
-  historyEndDate: String = new SimpleDateFormat("yyyyMMdd hh:mm:ss").format(new Date())
+  historyBarSize: BarSize = BarSize._1_min,
+  historyStartDate: Date = new DateTime(DateTimeZone.UTC).minusDays(1).toDate,
+  historyEndDate: Date = new DateTime(DateTimeZone.UTC).toDate
 )
 
+//historyEndDate: Option[String] = Some(DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss z").print(new DateTime(DateTimeZone.UTC)))
 /**
  * @author piotr 19.10.14
  */
 object Main {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
   private val version = "0.1"
+  val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss z")
 
   def getOptionParser: scopt.OptionParser[Options] = {
     val contractTypes = SecType.values().map(_.name)
     val durationUnits = DurationUnit.values().map(_.name)
     val barSizes = BarSize.values().map(_.name)
+    val validDateRe = """(\d{8}) (\d{2}:\d{2}:\d{2}) ?(\w*)""".r
     new scopt.OptionParser[Options]("ibclient") {
       head("ibclient", Main.version)
 
@@ -65,11 +72,17 @@ object Main {
       opt[Int]('p', "port") text ("port") action {
         (arg, dest) => dest.copy(port = arg)
       }
-      cmd("test") text ("test") action {
+      opt[Int]('i', "clientid") text ("client id") action {
+        (arg, dest) => dest.copy(clientId = arg)
+      }
+      cmd("history") text ("test") action {
         (_, dest) => dest.copy(mode = Mode.Test)
       } children(
         opt[String]('c', "contract") text ("contract") minOccurs (1) action {
-          (arg, dest) => dest.copy(contract = Some(arg))
+          (arg, dest) => dest.copy(contract = arg)
+        },
+        opt[String]('s', "localsymbol") text ("localsymbol eg EUR.USD") action {
+          (arg, dest) => dest.copy(localSymbol = Some(arg))
         },
         opt[String]('t', "type") text ("contract type") action {
           (arg, dest) => dest.copy(contractType = SecType.valueOf(arg))
@@ -79,11 +92,24 @@ object Main {
         opt[String]('e', "exchange") text ("exchange") action {
           (arg, dest) => dest.copy(contractExchange = arg)
         },
-        opt[String]('s', "currency") text ("currency") action {
+        opt[String]('x', "currency") text ("currency") action {
           (arg, dest) => dest.copy(contractCurrency = arg)
         },
-        opt[Int]('d', "duration") text ("duration") action {
-          (arg, dest) => dest.copy(historyDuration = arg)
+        opt[String]('a', "startdate") text ("startdate") action {
+          (arg, dest) => dest.copy(historyStartDate = dateTimeFormat.parseDateTime(arg).toDate)
+        } validate {x ⇒
+          x match {
+            case validDateRe ⇒ success
+            case _ ⇒ failure(s"argument doesn't match ${validDateRe.toString}")
+          }
+        },
+        opt[String]('z', "enddate") text ("enddate") action {
+          (arg, dest) => dest.copy(historyEndDate = dateTimeFormat.parseDateTime(arg).toDateSome(arg))
+        } validate {x ⇒
+          x match {
+            case validDateRe ⇒ success
+            case _ ⇒ failure(s"argument doesn't match ${validDateRe.toString}")
+          }
         },
         opt[String]('u', "durationunits") text ("duration units") action {
           (arg, dest) => dest.copy(historyDurationUnit = DurationUnit.valueOf(arg))
@@ -93,49 +119,8 @@ object Main {
         opt[String]('b', "barsize") text ("bar size") action {
           (arg, dest) => dest.copy(historyBarSize = BarSize.valueOf(arg))
         } validate (x => if (barSizes.contains(x)) success else failure("unknown bar size")),
-        note(s"duration unit is one of: '${barSizes.mkString(" ")}'"),
-
-        opt[String]('e', "enddate") text ("end date") action {
-          (arg, dest) => dest.copy(historyEndDate = arg)
-        }
-        )
-      cmd("history") text ("history") action {
-        (_, dest) => dest.copy(mode = Mode.History)
-      } children(
-        opt[String]('c', "contract") text ("contract") minOccurs (1) action {
-          (arg, dest) => dest.copy(contract = Some(arg))
-        },
-        opt[String]('t', "type") text ("contract type") action {
-          (arg, dest) => dest.copy(contractType = SecType.valueOf(arg))
-        } validate (x => if (contractTypes.contains(x)) success else failure("unknown contract type")),
-        note(s"contract type is one of: '${contractTypes.mkString(" ")}'"),
-
-        opt[String]('e', "exchange") text ("exchange") action {
-          (arg, dest) => dest.copy(contractExchange = arg)
-        },
-        opt[String]('s', "currency") text ("currency") action {
-          (arg, dest) => dest.copy(contractCurrency = arg)
-        },
-        opt[String]('x', "expiry") text ("expiry") action {
-          (arg, dest) => dest.copy(contractExpiry = arg)
-        },
-        opt[Int]('d', "duration") text ("duration") action {
-          (arg, dest) => dest.copy(historyDuration = arg)
-        },
-        opt[String]('u', "durationunits") text ("duration units") action {
-          (arg, dest) => dest.copy(historyDurationUnit = DurationUnit.valueOf(arg))
-        } validate (x => if (durationUnits.contains(x)) success else failure("unknown duration unit")),
-        note(s"duration unit is one of: '${durationUnits.mkString(" ")}'"),
-
-        opt[String]('b', "barsize") text ("bar size") action {
-          (arg, dest) => dest.copy(historyBarSize = BarSize.valueOf(arg))
-        } validate (x => if (barSizes.contains(x)) success else failure("unknown bar size")),
-        note(s"duration unit is one of: '${barSizes.mkString(" ")}'"),
-
-        opt[String]('e', "enddate") text ("end date") action {
-          (arg, dest) => dest.copy(historyEndDate = arg)
-        }
-        )
+        note(s"duration unit is one of: '${barSizes.mkString(" ")}'")
+      )
     }
   }
 
@@ -153,15 +138,6 @@ object Main {
         optionParser.reportError("Please specify a valid command")
         optionParser.showUsage
         false
-      }
-
-      case Mode.Test => {
-        test(options)
-        true
-      }
-      case Mode.Populate => {
-        populate(options)
-        true
       }
       case Mode.History => {
         history(options)
@@ -186,34 +162,17 @@ object Main {
     }
   }
 
-  def test(options: Options): Unit = {
-    val ibclient = new IBClient("localhost", 7496, 0)
-    Await.result(ibclient.connect(), Duration.Inf)
-    var s = ibclient.marketData(new StockContract("SPY", "SMART"))
-    s.observableTick.subscribe(
-      {tick ⇒ println(tick)},
-      {error ⇒ throw(error)},
-      {() ⇒ println("Closed")}
-    )
-    while (true)
-      Thread.sleep(1000)
-
-
-  }
-
-  def populate(options: Options): Unit = {
-
-  }
-
   def history(options: Options): Unit = {
-    val ibclient = new IBClient("localhost", 7496, 3)
+    val ibclient = new IBClient(options.host, options.port, options.clientId)
+    log.info(s"Connecting to ${options.host}:${options.port} with client id: ${options.clientId}")
     Await.result(ibclient.connect(), Duration.Inf)
     val contract: Contract = options.contractType match {
-      case SecType.STK => new StockContract(options.contract.get, options.contractExchange, options.contractCurrency)
-      case SecType.FUT => new FutureContract(options.contract.get, options.contractExpiry, options.contractExchange,
+      case SecType.STK => new StockContract(options.contract, options.contractExchange, options.contractCurrency)
+      case SecType.FUT => new FutureContract(options.contract, options.contractExpiry, options.contractExchange,
         options.contractCurrency
       )
-      case _ => throw new RuntimeException("contract type")
+      case SecType.CASH ⇒ new CashContract(options.contract, options.localSymbol.get, options.contractExchange, options.contractCurrency)
+      case _ => throw new RuntimeException(s"unsupported contract type ${contract}")
     }
 
     /*
@@ -222,8 +181,8 @@ object Main {
     println(cd)
     */
 
-    val res = ibclient.historicalData(contract, new Date(), options.historyDuration,
-      options.historyDurationUnit, options.historyBarSize, WhatToShow.MIDPOINT, false
+    val res = ibclient.easyHistoricalData(contract, options.historyStartDate, options.historyEndDate, options.historyBarSize,
+      WhatToShow.TRADES, false
     )
     val hist = Await.result(res, Duration.Inf)
     ibclient.disconnect()

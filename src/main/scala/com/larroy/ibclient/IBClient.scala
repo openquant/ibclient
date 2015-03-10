@@ -544,7 +544,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val durationStr = duration + " " + durationUnit.toString().charAt(0)
     val dateTime = new DateTime(endDate, DateTimeZone.UTC)
     // format yyyymmdd hh:mm:ss tmz, where the time zone is allowed (optionally) after a space at the end.
-    val dateStr = DateTimeFormat.forPattern("yyyyMMdd hh:mm:ss z").print(dateTime)
+    val dateStr = DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss z").print(dateTime)
     val request = new HistoricalRequest(contract.symbol, contract.exchange, durationUnit, barSize, duration)
 
     def doRequest = {
