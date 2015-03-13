@@ -481,7 +481,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val durationUnit = historyDuration.durationUnit
 
     def throttledRequest(endDate: Date, duration: Int): Future[IndexedSeq[Bar]] = {
-      val request = new HistoricalRequest(contract.symbol, contract.exchange, durationUnit, barSize, duration)
+      val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, durationUnit, barSize, duration)
       def doRequest = {
         val res = historicalData(contract, endDate, duration, durationUnit, barSize, whatToShow, rthOnly, false)
         historicalRateLimiter.requested(request)
@@ -545,10 +545,10 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val dateTime = new DateTime(endDate, DateTimeZone.UTC)
     // format yyyymmdd hh:mm:ss tmz, where the time zone is allowed (optionally) after a space at the end.
     val dateStr = DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss z").print(dateTime)
-    val request = new HistoricalRequest(contract.symbol, contract.exchange, durationUnit, barSize, duration)
+    val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, durationUnit, barSize, duration)
 
     def doRequest = {
-      log.debug(s"reqHistoricalData reqId: ${reqId} symbol: ${contract.symbol} duration: ${duration} barSize: ${barSize}")
+      log.debug(s"reqHistoricalData reqId: ${reqId} endDate: ${dateStr} symbol: ${contract.symbol} duration: ${duration} barSize: ${barSize}")
       eClientSocket.reqHistoricalData(reqId, contract, dateStr, durationStr, barSize.toString, whatToShow.toString,
         if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue])
     }

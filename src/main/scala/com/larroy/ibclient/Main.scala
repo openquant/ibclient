@@ -17,7 +17,7 @@ import scala.concurrent.duration.Duration
 
 object Mode extends Enumeration {
   type Mode = Value
-  val Invalid, Test, Populate, History = Value
+  val Invalid, Populate, History = Value
 }
 
 import Mode._
@@ -53,7 +53,7 @@ object Main {
     val contractTypes = SecType.values().map(_.name)
     val durationUnits = DurationUnit.values().map(_.name)
     val barSizes = BarSize.values().map(_.name)
-    val validDateRe = """(\d{8}) (\d{2}:\d{2}:\d{2}) ?(\w*)""".r
+    val validDateRe = """(\d{8}) (\d{2}:\d{2}:\d{2}) ?(\w*)?""".r
     new scopt.OptionParser[Options]("ibclient") {
       head("ibclient", Main.version)
 
@@ -75,8 +75,8 @@ object Main {
       opt[Int]('i', "clientid") text ("client id") action {
         (arg, dest) => dest.copy(clientId = arg)
       }
-      cmd("history") text ("test") action {
-        (_, dest) => dest.copy(mode = Mode.Test)
+      cmd("history") text ("history") action {
+        (_, dest) => dest.copy(mode = Mode.History)
       } children(
         opt[String]('c', "contract") text ("contract") minOccurs (1) action {
           (arg, dest) => dest.copy(contract = arg)
@@ -99,15 +99,15 @@ object Main {
           (arg, dest) => dest.copy(historyStartDate = dateTimeFormat.parseDateTime(arg).toDate)
         } validate {x ⇒
           x match {
-            case validDateRe ⇒ success
+            case validDateRe(_*) ⇒ success
             case _ ⇒ failure(s"argument doesn't match ${validDateRe.toString}")
           }
         },
         opt[String]('z', "enddate") text ("enddate") action {
-          (arg, dest) => dest.copy(historyEndDate = dateTimeFormat.parseDateTime(arg).toDateSome(arg))
+          (arg, dest) => dest.copy(historyEndDate = dateTimeFormat.parseDateTime(arg).toDate)
         } validate {x ⇒
           x match {
-            case validDateRe ⇒ success
+            case validDateRe(_*) ⇒ success
             case _ ⇒ failure(s"argument doesn't match ${validDateRe.toString}")
           }
         },
@@ -172,7 +172,7 @@ object Main {
         options.contractCurrency
       )
       case SecType.CASH ⇒ new CashContract(options.contract, options.localSymbol.get, options.contractExchange, options.contractCurrency)
-      case _ => throw new RuntimeException(s"unsupported contract type ${contract}")
+      case _ => throw new RuntimeException(s"unsupported contract type ${options.contractType}")
     }
 
     /*
@@ -180,11 +180,12 @@ object Main {
     val cd = Await.result(futureContractDetails, Duration.Inf)
     println(cd)
     */
-
+    import scala.concurrent.ExecutionContext.Implicits.global
     val res = ibclient.easyHistoricalData(contract, options.historyStartDate, options.historyEndDate, options.historyBarSize,
       WhatToShow.TRADES, false
     )
     val hist = Await.result(res, Duration.Inf)
+    println(hist)
     ibclient.disconnect()
     println(hist)
   }

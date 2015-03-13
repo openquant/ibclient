@@ -4,6 +4,7 @@ import java.util.Calendar
 
 import com.google.common.collect.TreeMultimap
 import scala.collection.JavaConversions._
+import org.slf4j.{Logger, LoggerFactory}
 
 
 /**
@@ -23,6 +24,7 @@ import scala.collection.JavaConversions._
  *         3. Do not make more than 60 historical data requests in any ten-minute period.
  */
 class HistoricalRateLimiter {
+  private[this] val log: Logger = LoggerFactory.getLogger(this.getClass)
   // latest times are first
   // map time of request in millis to request
   private[this] val requests = TreeMultimap.create[Long, HistoricalRequest](
@@ -37,14 +39,22 @@ class HistoricalRateLimiter {
    * @param request
    * @param reftime_ms
    */
-  def requested(request: HistoricalRequest, reftime_ms: Long = now_ms): Unit = synchronized {
-    requests.put(reftime_ms, request)
+  def requested(request: HistoricalRequest, reftime_ms: Option[Long] = None): Unit = synchronized {
+    val curTime = reftime_ms.getOrElse(now_ms)
+    requests.put(curTime, request)
   }
 
   protected def latestInLast(timeframe_ms: Long, reftime_ms: Long = now_ms): Iterator[java.util.Map.Entry[Long, HistoricalRequest]] = {
     requests.entries.iterator.takeWhile { x ⇒ x.getKey > reftime_ms - timeframe_ms}
   }
 
+  /**
+   * @param timeframe_ms timeframe to consider
+   * @param numRequests the allowed number of requests in this timeframe
+   * @param filter a comparison functor to filter only the given requests if nonEmpty
+   * @param reftime_ms the reference time (now)
+   * @return number of ms after we are able to have numRequests requests or less in the given timeframe with the optional filter
+   */
   def nextSlot_ms(timeframe_ms: Long, numRequests: Int, filter: Option[(HistoricalRequest) ⇒ Boolean] = None, reftime_ms: Long = now_ms): Long = {
     val latest = if (filter.isEmpty)
       latestInLast(timeframe_ms, reftime_ms).toVector
@@ -72,15 +82,18 @@ class HistoricalRateLimiter {
       req == request
     }
     after_ms = Math.max(after_ms, nextSlot_ms(15L * 1000, 1, Some(identical), reftime_ms))
+    log.debug(s"delayed ${after_ms} (identical requests within 15 s)")
 
     // restriction 2
     val sameContract = { req: HistoricalRequest ⇒
       (req.contract, req.exchange, req.barSize) == (request.contract, request.exchange, req.barSize)
     }
     after_ms = Math.max(after_ms, nextSlot_ms(2L * 1000, 5, Some(sameContract), reftime_ms))
+    log.debug(s"delayed ${after_ms} 6 or more same contract within 2 s")
 
     // restriction 3
     after_ms = Math.max(after_ms, nextSlot_ms(10L * 60 * 1000, 60, None, reftime_ms))
+    log.debug(s"delayed ${after_ms} no more than 60 in 10 min")
     after_ms
   }
 
