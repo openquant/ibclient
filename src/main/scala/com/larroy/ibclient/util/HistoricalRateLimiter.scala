@@ -40,8 +40,11 @@ class HistoricalRateLimiter {
    * @param reftime_ms
    */
   def requested(request: HistoricalRequest, reftime_ms: Option[Long] = None): Unit = synchronized {
-    val curTime = reftime_ms.getOrElse(now_ms)
-    requests.put(curTime, request)
+    var curTime = reftime_ms.getOrElse(now_ms)
+    while (requests.put(curTime, request) == false) {
+      log.warn(s"Incrememtomg reftime of request ${request}, another request with the same time ${curTime}")
+      curTime += 1
+    }
   }
 
   protected def latestInLast(timeframe_ms: Long, reftime_ms: Long = now_ms): Iterator[java.util.Map.Entry[Long, HistoricalRequest]] = {
