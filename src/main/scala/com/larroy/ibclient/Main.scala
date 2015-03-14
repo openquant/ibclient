@@ -1,8 +1,10 @@
 package com.larroy.ibclient
 
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 
+import com.github.tototoshi.csv.CSVWriter
 import com.ib.client.Contract
 import com.ib.client.Types.{WhatToShow, BarSize, DurationUnit, SecType}
 import com.larroy.ibclient.contract.{CashContract, FutureContract, StockContract}
@@ -17,7 +19,7 @@ import scala.concurrent.duration.Duration
 
 object Mode extends Enumeration {
   type Mode = Value
-  val Invalid, Populate, History = Value
+  val Invalid, History = Value
 }
 
 import Mode._
@@ -37,7 +39,8 @@ sealed case class Options(
   historyDurationUnit: DurationUnit = DurationUnit.DAY,
   historyBarSize: BarSize = BarSize._1_min,
   historyStartDate: Date = new DateTime(DateTimeZone.UTC).minusDays(1).toDate,
-  historyEndDate: Date = new DateTime(DateTimeZone.UTC).toDate
+  historyEndDate: Date = new DateTime(DateTimeZone.UTC).toDate,
+  historyOutFile: String = "history.csv"
 )
 
 //historyEndDate: Option[String] = Some(DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss z").print(new DateTime(DateTimeZone.UTC)))
@@ -119,7 +122,12 @@ object Main {
         opt[String]('b', "barsize") text ("bar size") action {
           (arg, dest) => dest.copy(historyBarSize = BarSize.valueOf(arg))
         } validate (x => if (barSizes.contains(x)) success else failure("unknown bar size")),
-        note(s"duration unit is one of: '${barSizes.mkString(" ")}'")
+        note(s"duration unit is one of: '${barSizes.mkString(" ")}'"),
+
+        opt[String]('o', "out") text ("output file") action {
+          (arg, dest) => dest.copy(historyOutFile = arg)
+        },
+        note(s"")
       )
     }
   }
@@ -163,6 +171,9 @@ object Main {
   }
 
   def history(options: Options): Unit = {
+    val outFile = new File(options.historyOutFile)
+    require(! outFile.exists(), s"Output file ${outFile.getAbsolutePath} already exists")
+
     val ibclient = new IBClient(options.host, options.port, options.clientId)
     log.info(s"Connecting to ${options.host}:${options.port} with client id: ${options.clientId}")
     Await.result(ibclient.connect(), Duration.Inf)
@@ -185,8 +196,11 @@ object Main {
       WhatToShow.TRADES, false
     )
     val hist = Await.result(res, Duration.Inf)
-    println(hist)
+    val csvWriter = CSVWriter.open(outFile)
+    hist.foreach { bar ⇒
+      csvWriter.writeRow(List(bar.time, bar.high, bar.low, bar.open, bar.close, bar.volume, bar.count, bar.hasGaps))
+    }
+    log.info(s"wrote ${hist.size} rows to ${outFile}")
     ibclient.disconnect()
-    println(hist)
   }
 }
