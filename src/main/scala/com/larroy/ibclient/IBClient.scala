@@ -10,11 +10,16 @@ import com.larroy.ibclient.order.Order
 import com.larroy.ibclient.util.{HistoricalRequest, HistoricalRateLimiter, HistoryLimits}
 import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTimeZone, DateTime}
+import com.typesafe.config.ConfigFactory
+import net.ceedubs.ficus.Ficus._
 
 import org.slf4j.{Logger, LoggerFactory}
 import rx.lang.scala.subjects.PublishSubject
 import scala.collection.mutable
-import scala.concurrent.{ExecutionContext, Promise, Future}
+import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.duration._
+import scala.concurrent.{Await, ExecutionContext, Promise, Future}
+import scala.util.{Success, Failure}
 
 /**
  * The API is fully asynchronous and thread safe.
@@ -27,6 +32,7 @@ import scala.concurrent.{ExecutionContext, Promise, Future}
  */
 class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrapper {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
+  private val cfg = ConfigFactory.load().getConfig("ibclient")
   val eClientSocket = new EClientSocket(this)
   var reqId: Int = 0
   var orderId: Int = 0
@@ -46,6 +52,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   private[this] var positionHandler: Option[PositionHandler] = None
 
   val historicalRateLimiter = new HistoricalRateLimiter
+  val historicalExecutionContext = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
 
   /**
    * @return A Future[Boolean] that is completed once the client is connected and set to true. If it can't connect
@@ -152,7 +159,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
           promise.failure(apierror)
         }
         reqHandler.remove(id).foreach { handler ⇒
-          log.error(s"Propagating error to and removing handler: ${id}")
+          log.error(s"Propagating error and removing handler: ${id}")
           handler.error(apierror)
         }
       }
@@ -474,12 +481,39 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     endDate: Date,
     barSize: BarSize,
     whatToShow: WhatToShow,
-    rthOnly: Boolean = false)
-      (implicit ctx: ExecutionContext): Future[IndexedSeq[Bar]] = synchronized
-  {
+    rthOnly: Boolean = false): Future[IndexedSeq[Bar]] = synchronized {
+
     val historyDuration = HistoryLimits.bestDuration(startDate, endDate, barSize)
     val durationUnit = historyDuration.durationUnit
+    val endDatesDurations = historyDuration.endDates(endDate).zip(historyDuration.durations)
+    val resultPromise = Promise[IndexedSeq[Bar]]()
+    val historyRequestAggregation = new Runnable {
+      def run(): Unit = {
+        val cumResult = mutable.Queue.empty[Bar]
+        println(endDatesDurations)
+        endDatesDurations.reverseIterator.foreach { dateDuration ⇒
+          val endDate = dateDuration._1
+          val duration = dateDuration._2
+          val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, durationUnit, barSize, duration)
+          val nextAfter_ms = historicalRateLimiter.registerAndGetWait_ms(request)
+          if (nextAfter_ms > 0)
+            Thread.sleep(nextAfter_ms)
+          val barsFuture = historicalData(contract, endDate, duration, durationUnit, barSize, whatToShow, rthOnly, false)
+          Await.ready(barsFuture, Duration(cfg.as[Int]("historyRequestTimeout.length"), cfg.as[String]("historyRequestTimeout.unit")))
+          barsFuture.value match {
+            case None ⇒ resultPromise.failure(new IBClientError(s"History request timeout ${request}"))
+            case Some(Failure(error)) if cumResult.isEmpty ⇒ resultPromise.failure(error)
+            case Some(Failure(error)) ⇒ log.warn(s"Partial history request failure: ${request} this means some requests failed but others succeeded")
+            case Some(Success(bars)) ⇒ cumResult ++= bars.reverse
+          }
+        }
+        resultPromise.success(cumResult.reverseIterator.toVector)
+      }
+    }
+    historicalExecutionContext.execute(historyRequestAggregation)
+    resultPromise.future
 
+    /*
     def throttledRequest(endDate: Date, duration: Int): Future[IndexedSeq[Bar]] = {
       val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, durationUnit, barSize, duration)
       def doRequest = {
@@ -501,11 +535,28 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       }
     }
 
-    val partialResults: Vector[Future[IndexedSeq[Bar]]] = historyDuration.endDates(endDate).zip(historyDuration.durations).map { x ⇒ throttledRequest(x._1, x._2) }
+    val partialResults = ArrayBuffer.empty[Future[IndexedSeq[Bar]]]
+   .foreach { dateDuration ⇒
+      partialResults.foreach { partialResult ⇒
+        println(s"${partialResult}")
+        if (partialResult.isCompleted) {
+          partialResult.value match {
+            case Some(Failure(e)) ⇒ {
+              log.error("Request failed!")
+              return Promise[mutable.IndexedSeq[Bar]].failure(e).future
+            }
+            case _ ⇒
+          }
+
+        }
+      }
+      partialResults += throttledRequest(dateDuration._1, dateDuration._2)
+    }
     historicalRateLimiter.cleanup()
 
     val result = Future.sequence(partialResults).map { x ⇒ x.flatMap(identity) }
     result
+    */
   }
 
 
@@ -554,22 +605,19 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
 
     if (rateLimit) {
-      val nextAfter_ms = historicalRateLimiter.nextRequestAfter_ms(request)
+      val nextAfter_ms = historicalRateLimiter.registerAndGetWait_ms(request)
       if (nextAfter_ms > 0) {
         log.debug(s"rate limiting historicalData, deferring ${nextAfter_ms} ms")
         util.defer(nextAfter_ms) {
           doRequest
-          historicalRateLimiter.requested(request)
-        }(ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor()))
+        }(historicalExecutionContext)
       } else {
         doRequest
-        historicalRateLimiter.requested(request)
       }
       historicalRateLimiter.cleanup()
     } else {
       doRequest
     }
-
     promise.future
   }
 

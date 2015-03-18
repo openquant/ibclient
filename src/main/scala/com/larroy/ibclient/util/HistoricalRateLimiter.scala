@@ -100,6 +100,12 @@ class HistoricalRateLimiter {
     after_ms
   }
 
+  def registerAndGetWait_ms(request: HistoricalRequest): Long = synchronized {
+    val wait_ms = nextRequestAfter_ms(request)
+    requested(request, Some(now_ms + wait_ms))
+    wait_ms
+  }
+
   def cleanupAfter(time_ms: Long): Unit = synchronized {
     val expired = requests.keys.filter { x ⇒ x < time_ms }
     expired.foreach { key ⇒
