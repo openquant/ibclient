@@ -5,6 +5,8 @@ import java.util.Calendar
 import org.joda.time.format.DateTimeFormat
 
 import scala.concurrent.{ExecutionContext, Future}
+import scala.util.control.NonFatal
+import scala.util.{Failure, Try, Success}
 
 /**
  * @author piotr 03.03.15
@@ -28,4 +30,12 @@ package object util {
     }(ctx)
   }
 
+  @annotation.tailrec
+  def retry[T](n: Int)(fn: => T): Try[T] = {
+    Try { fn } match {
+      case x: Success[T] => x
+      case Failure(NonFatal(_)) if n > 1 => retry(n - 1)(fn)
+      case f => f
+    }
+  }
 }
