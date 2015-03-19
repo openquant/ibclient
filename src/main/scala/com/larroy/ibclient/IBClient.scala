@@ -487,7 +487,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val durationUnit = historyDuration.durationUnit
     val endDatesDurations = historyDuration.endDates(endDate).zip(historyDuration.durations)
     val resultPromise = Promise[IndexedSeq[Bar]]()
-    class RetryException extends Exception()
+    case class RetryException() extends Exception()
     val historyRequestAggregation = new Runnable {
       def run(): Unit = {
         val cumResult = mutable.Queue.empty[Bar]
