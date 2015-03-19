@@ -39,7 +39,7 @@ sealed case class Options(
   historyDurationUnit: DurationUnit = DurationUnit.DAY,
   historyBarSize: BarSize = BarSize._1_min,
   historyStartDate: Date = new DateTime(DateTimeZone.UTC).minusDays(1).toDate,
-  historyEndDate: Date = new DateTime(DateTimeZone.UTC).toDate,
+  historyEndDate: Date = new DateTime(DateTimeZone.UTC).minusMinutes(1).toDate,
   historyOutFile: String = "history.csv"
 )
 
