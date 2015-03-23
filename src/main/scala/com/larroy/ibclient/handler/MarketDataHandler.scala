@@ -1,7 +1,6 @@
 package com.larroy.ibclient.handler
 
 import com.larroy.ibclient.{Tick, MarketDataSubscription}
-import com.larroy.ibclient.MarketDataSubscription
 import rx.lang.scala.Subject
 
 /**

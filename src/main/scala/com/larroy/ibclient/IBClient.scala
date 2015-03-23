@@ -1,7 +1,7 @@
 package com.larroy.ibclient
 
 import java.util.concurrent.Executors
-import java.util.{Collections, Date}
+import java.util.{Collections, Date, ArrayList}
 
 import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
@@ -688,7 +688,39 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
 
   /* realtime bars ********************************************************************************/
-  // TODO
+
+  def realtimeBars(contract: Contract, whatToShow: WhatToShow, rthOnly: Boolean = false):
+  RealtimeBarsSubscription = synchronized {
+    if (!eClientSocket.isConnected)
+      throw new IBApiError("marketData: Client is not connected")
+    reqId += 1
+    // bars are 5 seconds
+    //eClientSocket.reqRealTimeBars(reqId, contract, 0, whatToShow.toString, rthOnly, Collections.emptyList[TagValue])
+    eClientSocket.reqRealTimeBars(reqId, contract, 0, whatToShow.toString, rthOnly, new ArrayList[TagValue]())
+    val publishSubject = PublishSubject[Bar]()
+    val subscription = new RealtimeBarsSubscription(this, reqId, contract, publishSubject)
+    val realtimeBarsHandler = new RealtimeBarsHandler(subscription, publishSubject)
+    reqHandler += (reqId → realtimeBarsHandler)
+    log.debug(s"realtimeBars reqId: ${reqId}")
+    subscription
+
+  }
+
+  /**
+   * Close realtime bar
+   * if there's no subscription with the given id this call has no effect
+   *
+   * @param id id of the [[MarketDataSubscription]]
+   */
+  def closeRealtimeBar(id: Int): Unit = synchronized {
+    reqHandler.remove(id).foreach { handler ⇒
+      val realtimeBarsHandler = handler.asInstanceOf[RealtimeBarsHandler]
+      eClientSocket.cancelRealTimeBars(id)
+      log.debug(s"Closed realtimeBars id: ${id}")
+      realtimeBarsHandler.subject.onCompleted()
+    }
+  }
+
 
   override def realtimeBar(reqId: Int, time: Long, open: Double, high: Double, low: Double, close: Double, volume: Long,
     wap: Double, count: Int
