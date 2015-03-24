@@ -724,7 +724,18 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   override def realtimeBar(reqId: Int, time: Long, open: Double, high: Double, low: Double, close: Double, volume: Long,
     wap: Double, count: Int
-  ): Unit = {}
+  ): Unit = {
+    log.debug(s"realtimeBar id: ${reqId} time: ${time} o: ${open} h: ${high} l: ${low} c: ${close} v: ${volume} w: ${wap} cnt: ${count}")
+    var handled = false
+    reqHandler.get(reqId).foreach { handler ⇒
+      val marketDataHandler = handler.asInstanceOf[RealtimeBarsHandler]
+      marketDataHandler.subject.onNext(Bar(time, high, low, open, close, volume.toInt, count, wap, false))
+      handled = true
+    }
+    if (!handled)
+      log.debug(s"realtimeBar ${reqId} ignored, no handler exists for that id")
+
+  }
 
   /* display groups ********************************************************************************/
   // TODO
