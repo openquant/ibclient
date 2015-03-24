@@ -688,7 +688,17 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
 
   /* realtime bars ********************************************************************************/
-
+  /**
+   * Request a realtime bar covering 5 seconds of market activity
+   * @param contract
+   * @param whatToShow
+   * @param rthOnly use only regular trading hours
+   * @return a [[RealtimeBarsSubscription]] which has an observableBar to which you can subscribe to
+   * {{{
+   * val subscription = ibclient.realtimeBars(new CashContract("EUR","EUR.USD"), WhatToShow.MIDPOINT)
+   * subscription.observableBar.subscribe({bar=>println(s"got bar ${bar}")}, {error ⇒ throw (error)})
+   * }}}
+   */
   def realtimeBars(contract: Contract, whatToShow: WhatToShow, rthOnly: Boolean = false):
   RealtimeBarsSubscription = synchronized {
     if (!eClientSocket.isConnected)
@@ -707,10 +717,10 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /**
-   * Close realtime bar
+   * Close realtime bar data line
    * if there's no subscription with the given id this call has no effect
    *
-   * @param id id of the [[MarketDataSubscription]]
+   * @param id id of the [[RealtimeBarsSubscription]]
    */
   def closeRealtimeBar(id: Int): Unit = synchronized {
     reqHandler.remove(id).foreach { handler ⇒
