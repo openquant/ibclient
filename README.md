@@ -20,8 +20,7 @@ import java.text.SimpleDateFormat
     Await.result(ibclient.connect(), Duration.Inf)
 
  val subscription = ibclient.realtimeBars(new CashContract("EUR","EUR.USD"), WhatToShow.MIDPOINT)
- subscription.observableBar.subscribe({bar=>println(s"got bar ${bar}")},         {error ⇒ throw
- (error)})
+ subscription.observableBar.subscribe({bar=>println(s"got bar ${bar}")}, {error ⇒ throw (error)})
 
 
  java -cp "target/scala-2.11/ibclient-assembly-0.1.jar":jython-standalone-2.7-b4.jar

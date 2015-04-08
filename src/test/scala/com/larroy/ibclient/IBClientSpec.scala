@@ -2,6 +2,7 @@ package com.larroy.ibclient
 
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.concurrent.{ArrayBlockingQueue, TimeUnit}
 
 import com.ib.client.Types.{BarSize, DurationUnit, WhatToShow, SecType}
 import com.larroy.ibclient.contract.{CashContract, StockContract}
@@ -97,6 +98,27 @@ class IBClientSpec extends Specification {
     "positions" in {
       val pos = Await.result(ibclient.positions(), testWaitDuration)
       pos must not be empty
+    }
+    "realtime bars" in {
+      val subscription = ibclient.realtimeBars(new CashContract("EUR", "EUR.USD"))
+      // The functions passed to subscribe are executed in the EReader thread
+      // This can be changed by using observeOn
+      // subscription.observableBar.observeOn(ComputationScheduler()).subscribe({bar=>log.debug(s"got bar ${bar}")},{error ⇒ throw (error)})
+      var bars = new ArrayBlockingQueue[Bar](64)
+      subscription.observableBar.subscribe(
+        { bar =>
+          log.debug(s"got bar ${bar}")
+          val succ = bars.offer(bar)
+          if (! succ)
+            log.debug("Bar queue full")
+        },
+        { error ⇒
+          throw error
+        }
+      )
+      val bar = Option(bars.poll(3, TimeUnit.SECONDS))
+      subscription.close
+      bar must not be empty
     }
   }
 }

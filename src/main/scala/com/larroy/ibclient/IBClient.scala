@@ -699,7 +699,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * subscription.observableBar.subscribe({bar=>println(s"got bar ${bar}")}, {error ⇒ throw (error)})
    * }}}
    */
-  def realtimeBars(contract: Contract, whatToShow: WhatToShow, rthOnly: Boolean = false):
+  def realtimeBars(contract: Contract, whatToShow: WhatToShow = WhatToShow.MIDPOINT, rthOnly: Boolean = false):
   RealtimeBarsSubscription = synchronized {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
