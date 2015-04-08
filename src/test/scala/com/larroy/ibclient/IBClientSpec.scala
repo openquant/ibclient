@@ -104,7 +104,7 @@ class IBClientSpec extends Specification {
       // The functions passed to subscribe are executed in the EReader thread
       // This can be changed by using observeOn
       // subscription.observableBar.observeOn(ComputationScheduler()).subscribe({bar=>log.debug(s"got bar ${bar}")},{error ⇒ throw (error)})
-      var bars = new ArrayBlockingQueue[Bar](64)
+      val bars = new ArrayBlockingQueue[Bar](64)
       subscription.observableBar.subscribe(
         { bar =>
           log.debug(s"got bar ${bar}")
