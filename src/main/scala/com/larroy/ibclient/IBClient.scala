@@ -5,6 +5,7 @@ import java.util.{Collections, Date, ArrayList}
 
 import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
+import com.larroy.ibclient.account.{Value, AccountUpdate, AccountUpdateSubscription}
 import com.larroy.ibclient.handler._
 import com.larroy.ibclient.order.Order
 import com.larroy.ibclient.util.{HistoricalRequest, HistoricalRateLimiter, HistoryLimits}
@@ -19,7 +20,7 @@ import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Promise, Future}
-import scala.util.{Success, Failure}
+import scala.util.{Try, Success, Failure}
 
 /**
  * The API is fully asynchronous and thread safe.
@@ -40,16 +41,22 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   var errorCount: Int = 0
   var warnCount: Int = 0
 
+  private[this] var connectResult = Promise[Boolean]()
+
   /**
    * A map of request id to Promise
+   * Each request with its id is associated with a Handler and a promise to fulfill when the data is ready for consumption
+   * by the client.
    */
   val reqHandler = mutable.Map.empty[Int, Handler]
   val reqPromise = mutable.Map.empty[Int, AnyRef]
 
-  private[this] var connectResult = Promise[Boolean]()
-
+  // Specific handlers and promises for calls that don't have an associated id
+  // Promise and handler for position call
   private[this] var positionsPromise: Option[Promise[IndexedSeq[Position]]] = None
   private[this] var positionHandler: Option[PositionHandler] = None
+
+  private[this] var accountUpdateHandler: Option[AccountUpdateHandler] = None
 
   val historicalRateLimiter = new HistoricalRateLimiter
   val historicalExecutionContext = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
@@ -331,21 +338,65 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* account and portfolio ********************************************************************************/
   // TODO
 
-  override def updateAccountValue(key: String, value: String, currency: String, accountName: String): Unit = {}
+  /**
+   * There can be only one AccountUpdateSubscription, getting more than one will prevent the previous from receiving updates
+   * @param account The account id, empty by default which returns this account
+   * @return
+   */
+  def accountUpdate(account: String = ""): AccountUpdateSubscription = {
+    if (!eClientSocket.isConnected)
+      throw new IBApiError("accountUpdate: Client is not connected")
+    eClientSocket.reqAccountUpdates(true, account)
+    val publishSubject = PublishSubject[AccountUpdate]()
+    val subscription = new AccountUpdateSubscription(this, publishSubject)
+    accountUpdateHandler = Some(new AccountUpdateHandler(subscription, publishSubject))
+    subscription
+  }
+
+  def closeAccountUpdateSubscription(): Unit = {
+    accountUpdateHandler.foreach { handler ⇒ handler.subject.onCompleted() }
+    eClientSocket.reqAccountUpdates(false, "")
+    accountUpdateHandler = None
+  }
+
+  override def updateAccountValue(key: String, value: String, currency: String, accountName: String): Unit = {
+    log.debug(s"updateAccountValue key: ${key} value: ${value} currency: ${currency} accountName: ${accountName}")
+    accountUpdateHandler.foreach { handler ⇒
+      Try(value.toDouble) match {
+        case Success(x) ⇒
+          handler.nextAccountUpdate.accountInfo += (key → new Value(x, currency))
+        case Failure(e) ⇒
+          log.warn(s"Ignoring key: ${key} value: ${value} which can't be converted to double")
+      }
+      //handler.subject.onNext()
+    }
+
+  }
 
   override def updatePortfolio(contract: Contract, position: Int, marketPrice: Double, marketValue: Double,
     averageCost: Double, unrealizedPNL: Double, realizedPNL: Double, accountName: String
-  ): Unit = {}
+  ): Unit = {
+    log.debug(s"updatePortfolio contract: ${contract} position: ${position} mktPrx: ${marketPrice} mktVal: ${marketValue} avgCost: ${averageCost} unrlzPNL ${unrealizedPNL} realizedPNL ${realizedPNL} accountName: ${accountName}")
+  }
 
-  override def updateAccountTime(timeStamp: String): Unit = {}
+  override def updateAccountTime(timeStamp: String): Unit = {
+    log.debug(s"updateAccountTime ${timeStamp}")
+  }
 
 
   override def accountDownloadEnd(accountName: String): Unit = {
+    log.debug(s"accountDownloadEnd ${accountName}")
+    log.debug(s"***********************************************************************************")
   }
 
-  override def accountSummary(reqId: Int, account: String, tag: String, value: String, currency: String): Unit = {}
+  // response to reqAccountSummary
+  override def accountSummary(reqId: Int, account: String, tag: String, value: String, currency: String): Unit = {
+    log.debug(s"accountSummary reqId: ${reqId} account: ${account} tag: ${tag} value: ${value} currency: ${currency}")
+  }
 
-  override def accountSummaryEnd(reqId: Int): Unit = {}
+  override def accountSummaryEnd(reqId: Int): Unit = {
+    log.debug(s"accountSumaryEnd: ${reqId}")
+  }
 
   /* Positions ********************************************************************************/
 
