@@ -58,6 +58,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   private[this] var accountUpdateHandler: Option[AccountUpdateHandler] = None
 
+  private[this] var scannerPromise: Option[Promise[String]] = None
+
   val historicalRateLimiter = new HistoricalRateLimiter
   val historicalExecutionContext = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
 
@@ -336,13 +338,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   override def deltaNeutralValidation(reqId: Int, underComp: DeltaNeutralContract): Unit = {}
 
   /* account and portfolio ********************************************************************************/
-  // TODO
 
   /**
    * There can be only one AccountUpdateSubscription, getting more than one will prevent the previous from receiving updates
    * @param account The account id, empty by default which returns this account
    * @return
    */
+  // TODO: Once accountDownloadEnd problem is fixed by IB we can finish this feature
   def accountUpdate(account: String = ""): AccountUpdateSubscription = {
     if (!eClientSocket.isConnected)
       throw new IBApiError("accountUpdate: Client is not connected")
@@ -729,13 +731,30 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* market scanners ********************************************************************************/
   // TODO
 
-  override def scannerParameters(xml: String): Unit = {}
+  def scannerParameters(): Future[String] = {
+    scannerPromise = Some(Promise[String])
+    eClientSocket.reqScannerParameters()
+    scannerPromise.get.future
+  }
+
+  override def scannerParameters(xml: String): Unit = {
+    log.debug(s"scannerParameters ${xml}")
+    scannerPromise.foreach { promise ⇒
+      promise.success(xml)
+    }
+  }
 
   override def scannerData(reqId: Int, rank: Int, contractDetails: ContractDetails, distance: String, benchmark: String,
     projection: String, legsStr: String
-  ): Unit = {}
+  ): Unit = {
+    log.debug(s"scannerData ${reqId} ${rank} ${contractDetails} ${distance} ${benchmark} ${projection} ${legsStr}")
 
-  override def scannerDataEnd(reqId: Int): Unit = {}
+  }
+
+  override def scannerDataEnd(reqId: Int): Unit = {
+    log.debug(s"scannerDataEnd: ${reqId}")
+
+  }
 
 
   /* realtime bars ********************************************************************************/

@@ -92,7 +92,7 @@ class IBClientSpec extends Specification {
       } catch {
         case e: InterruptedException ⇒
       }
-      (result.length >= 1)  must beTrue
+      ((result.length >= 1)  must beTrue).setMessage("We didn't receive market data")
     }
 
     "positions" in {
@@ -118,7 +118,7 @@ class IBClientSpec extends Specification {
       )
       val bar = Option(bars.poll(3, TimeUnit.SECONDS))
       subscription.close
-      bar must not be empty
+      (bar must not be empty).setMessage("We didn't receive market data")
     }
   }
 }
