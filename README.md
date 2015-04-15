@@ -26,3 +26,20 @@ import java.text.SimpleDateFormat
  java -cp "target/scala-2.11/ibclient-assembly-0.1.jar":jython-standalone-2.7-b4.jar
  org.python.util.jython
 
+
+
+
+import scala.concurrent.duration._
+import org.joda.time._
+
+val startDate = new DateTime(2015, 4, 10, 15, 0).toDate
+
+val endDate = new DateTime(2015, 4, 13, 15, 0).toDate
+
+
+val contract = new CashContract("EUR","EUR.USD")
+
+
+val h = Await.result(ibclient.easyHistoricalData(contract, startDate, endDate, BarSize._1_min, WhatToShow.TRADES), duration.Duration.Inf)
+
+
