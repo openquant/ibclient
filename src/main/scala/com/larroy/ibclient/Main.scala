@@ -36,7 +36,6 @@ sealed case class Options(
   contractExchange: String = "SMART",
   contractCurrency: String = "USD",
   contractExpiry: String = "",
-  historyDurationUnit: DurationUnit = DurationUnit.DAY,
   historyBarSize: BarSize = BarSize._1_min,
   historyStartDate: Date = new DateTime(DateTimeZone.UTC).minusDays(1).toDate,
   historyEndDate: Date = new DateTime(DateTimeZone.UTC).minusMinutes(1).toDate,
@@ -50,7 +49,7 @@ sealed case class Options(
 object Main {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
   private val version = "0.1"
-  val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss z")
+  val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss")
 
   def getOptionParser: scopt.OptionParser[Options] = {
     val contractTypes = SecType.values().map(_.name)
@@ -98,6 +97,9 @@ object Main {
         opt[String]('x', "currency") text ("currency") action {
           (arg, dest) => dest.copy(contractCurrency = arg)
         },
+        opt[String]('y', "expiry") text ("expiry") action {
+          (arg, dest) => dest.copy(contractExpiry = arg)
+        },
         opt[String]('a', "startdate") text ("startdate") action {
           (arg, dest) => dest.copy(historyStartDate = dateTimeFormat.parseDateTime(arg).toDate)
         } validate {x ⇒
@@ -106,6 +108,8 @@ object Main {
             case _ ⇒ failure(s"argument doesn't match ${validDateRe.toString}")
           }
         },
+        note(s"date has format yyyyMMdd HH:mm:ss z"),
+
         opt[String]('z', "enddate") text ("enddate") action {
           (arg, dest) => dest.copy(historyEndDate = dateTimeFormat.parseDateTime(arg).toDate)
         } validate {x ⇒
@@ -114,10 +118,6 @@ object Main {
             case _ ⇒ failure(s"argument doesn't match ${validDateRe.toString}")
           }
         },
-        opt[String]('u', "durationunits") text ("duration units") action {
-          (arg, dest) => dest.copy(historyDurationUnit = DurationUnit.valueOf(arg))
-        } validate (x => if (durationUnits.contains(x)) success else failure("unknown duration unit")),
-        note(s"duration unit is one of: '${durationUnits.mkString(" ")}'"),
 
         opt[String]('b', "barsize") text ("bar size") action {
           (arg, dest) => dest.copy(historyBarSize = BarSize.valueOf(arg))
