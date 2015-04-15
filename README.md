@@ -43,3 +43,8 @@ val contract = new CashContract("EUR","EUR.USD")
 val h = Await.result(ibclient.easyHistoricalData(contract, startDate, endDate, BarSize._1_min, WhatToShow.TRADES), duration.Duration.Inf)
 
 
+
+Future contract identified by expiry date 2015
+
+history -c CL -t FUT -e NYMEX -x USD  -y 20150421 -a "20150128 15:00:00" -z "20150415 15:00:00"  -b
+_1_min -o cl.csv 

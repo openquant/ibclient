@@ -133,16 +133,16 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     eClientSocket.eDisconnect()
   }
 
-  override def error(id: Int, errorCode: Int, errorMsg: String): Unit = synchronized {
+  override def error(reqId: Int, errorCode: Int, errorMsg: String): Unit = synchronized {
     if (errorCode > 2000) {
       warnCount += 1
-      log.warn(s"Warning ${id} ${errorCode} ${errorMsg}")
+      log.warn(s"Warning ${reqId} ${errorCode} ${errorMsg}")
     } else {
       errorCount += 1
-      val errmsg = s"Error requestId: ${id} code: ${errorCode} msg: ${errorMsg}"
+      val errmsg = s"Error requestId: ${reqId} code: ${errorCode} msg: ${errorMsg}"
       log.error(errmsg)
-      val apierror = new IBApiError(errmsg)
-      if (id == -1) {
+      val apierror = new IBApiError(errorCode, errorMsg, reqId)
+      if (reqId == -1) {
         // Error not specific to any request, these can be quite tricky to handle
         // if we were connecting we need to fail the connecting promise
         if (errorCode == 507)
@@ -162,13 +162,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
       } else {
         // error specific to particular request with id: id
-        reqPromise.remove(id).foreach { p =>
-          log.error(s"Failing and removing promise: ${id}")
+        reqPromise.remove(reqId).foreach { p =>
+          log.error(s"Failing and removing promise: ${reqId}")
           val promise = p.asInstanceOf[Promise[_]]
           promise.failure(apierror)
         }
-        reqHandler.remove(id).foreach { handler ⇒
-          log.error(s"Propagating error and removing handler: ${id}")
+        reqHandler.remove(reqId).foreach { handler ⇒
+          log.error(s"Propagating error and removing handler: ${reqId}")
           handler.error(apierror)
         }
       }
@@ -558,7 +558,10 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
             Await.ready(barsFuture, Duration(cfg.as[Int]("historyRequestTimeout.length"), cfg.as[String]("historyRequestTimeout.unit")))
             barsFuture.value match {
               // Promise not completed, timeout
-              case None ⇒ resultPromise.failure(new IBClientError(s"History request timeout ${request}"))
+              case None ⇒ {
+                log.debug("Promise not completed, timeout")
+                resultPromise.failure(new IBClientError(s"History request timeout ${request}"))
+              }
 
               // No Data
               case Some(Failure(error: IBApiError)) if error.code == 162 && error.msg.matches("Historical Market Data Service error message:HMDS query returned no data.*") ⇒ {
@@ -574,10 +577,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
               }
 
               // Other failure, but we have some results
-              case Some(Failure(error)) if cumResult.isEmpty ⇒ resultPromise.failure(error)
+              case Some(Failure(error)) if cumResult.isEmpty ⇒ {
+                resultPromise.failure(error)
+              }
 
               // Other failure, no results
-              case Some(Failure(error)) ⇒ log.warn(s"Partial history request failure: ${request} this means some requests failed but others succeeded")
+              case Some(Failure(error)) ⇒ {
+                log.warn(s"Partial history request failure: ${request} this means some requests failed but others succeeded")
+              }
 
               // Success
               case Some(Success(bars)) ⇒ cumResult ++= bars.reverse
