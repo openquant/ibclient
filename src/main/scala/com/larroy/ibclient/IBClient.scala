@@ -163,12 +163,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       } else {
         // error specific to particular request with id: id
         reqPromise.remove(reqId).foreach { p =>
-          log.error(s"Failing and removing promise: ${reqId}")
+          log.debug(s"Failing and removing promise: ${reqId}")
           val promise = p.asInstanceOf[Promise[_]]
           promise.failure(apierror)
         }
         reqHandler.remove(reqId).foreach { handler ⇒
-          log.error(s"Propagating error and removing handler: ${reqId}")
+          log.debug(s"Propagating error and removing handler: ${reqId}")
           handler.error(apierror)
         }
       }
@@ -540,10 +540,50 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val durationUnit = historyDuration.durationUnit
     val endDatesDurations = historyDuration.endDates(endDate).zip(historyDuration.durations)
     val resultPromise = Promise[IndexedSeq[Bar]]()
-    case class RetryException() extends Exception()
+    case class PacingViolationRetryLimitException() extends Exception()
     val historyRequestAggregation = new Runnable {
+      val cumResult = mutable.Queue.empty[Bar]
+      def doRequest(request: HistoricalRequest): Unit = {
+        val barsFuture = historicalData(contract, request.endDate, request.duration, durationUnit, barSize, whatToShow, rthOnly, false)
+        Await.ready(barsFuture, Duration(cfg.as[Int]("historyRequestTimeout.length"), cfg.as[String]("historyRequestTimeout.unit")))
+        barsFuture.value match {
+          // Promise not completed, timeout
+          case None ⇒ {
+            log.debug("Promise not completed, timeout")
+            resultPromise.failure(new IBClientError(s"History request timeout ${request}"))
+          }
+
+          // No Data
+          case Some(Failure(error: IBApiError)) if error.code == 162 && error.msg.matches("Historical Market Data Service error message:HMDS query returned no data.*") ⇒ {
+            log.warn(s"easyHistoricalData: History request ${request} returned no data")
+          }
+
+          // Pacing violation
+          case Some(Failure(error: IBApiError)) if error.code == 162 && error.msg.matches("Historical Market Data Service error message:Historical data request pacing violation.*") ⇒ {
+            //log.warn(s"easyHistoricalData: Pacing violation for request: ${request}, suspending for: ${waitTime}")
+            //Thread.sleep(waitTime.toMillis)
+            log.warn(s"easyHistoricalData: Pacing violation for request: ${request}")
+            throw new PacingViolationRetryLimitException
+          }
+
+          // Other failure, but we have some results
+          case Some(Failure(error)) if cumResult.isEmpty ⇒ {
+            resultPromise.failure(error)
+          }
+
+          // Other failure, no results
+          case Some(Failure(error)) ⇒ {
+            log.warn(s"Partial history request failure: ${request} this means some requests failed but others succeeded")
+          }
+
+          // Success
+          case Some(Success(bars)) ⇒ {
+            log.debug("historicalData succes")
+            cumResult ++= bars.reverse
+          }
+        }
+      }
       def run(): Unit = {
-        val cumResult = mutable.Queue.empty[Bar]
         log.debug(s"easyHistoricalData, durations: ${endDatesDurations}")
         endDatesDurations.reverseIterator.foreach { dateDuration ⇒
           val endDate = dateDuration._1
@@ -552,44 +592,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
           val nextAfter_ms = historicalRateLimiter.registerAndGetWait_ms(request)
           if (nextAfter_ms > 0)
             Thread.sleep(nextAfter_ms)
-
-          util.retry(cfg.as[Int]("historyRequestPacingViolationRetry.count")) {
-            val barsFuture = historicalData(contract, endDate, duration, durationUnit, barSize, whatToShow, rthOnly, false)
-            Await.ready(barsFuture, Duration(cfg.as[Int]("historyRequestTimeout.length"), cfg.as[String]("historyRequestTimeout.unit")))
-            barsFuture.value match {
-              // Promise not completed, timeout
-              case None ⇒ {
-                log.debug("Promise not completed, timeout")
-                resultPromise.failure(new IBClientError(s"History request timeout ${request}"))
-              }
-
-              // No Data
-              case Some(Failure(error: IBApiError)) if error.code == 162 && error.msg.matches("Historical Market Data Service error message:HMDS query returned no data.*") ⇒ {
-                log.warn(s"easyHistoricalData: History request ${request} returned no data")
-              }
-
-              // Pacing violation
-              case Some(Failure(error: IBApiError)) if error.code == 162 && error.msg.matches("Historical Market Data Service error message:Historical data request pacing violation.*") ⇒ {
-                val waitTime = Duration(cfg.as[Int]("historyrequestpacingviolationretry.length"), cfg.as[String]("historyrequestpacingviolationretry.unit"))
-                log.warn(s"easyHistoricalData: Pacing violation for request: ${request}, suspending for: ${waitTime}")
-                Thread.sleep(waitTime.toMillis)
-                throw new RetryException
-              }
-
-              // Other failure, but we have some results
-              case Some(Failure(error)) if cumResult.isEmpty ⇒ {
-                resultPromise.failure(error)
-              }
-
-              // Other failure, no results
-              case Some(Failure(error)) ⇒ {
-                log.warn(s"Partial history request failure: ${request} this means some requests failed but others succeeded")
-              }
-
-              // Success
-              case Some(Success(bars)) ⇒ cumResult ++= bars.reverse
-            }
-          }
+          val waitTime = Duration(cfg.as[Int]("historyRequestPacingViolationRetry.length"), cfg.as[String]("historyRequestPacingViolationRetry.unit"))
+          util.retry(cfg.as[Int]("historyRequestPacingViolationRetry.count"))(doRequest(request), waitTime.toMillis)
         }
         resultPromise.success(cumResult.reverseIterator.toVector)
       }

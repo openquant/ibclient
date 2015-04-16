@@ -7,6 +7,7 @@ import org.joda.time.format.DateTimeFormat
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Try, Success}
+import org.slf4j.{Logger, LoggerFactory}
 
 /**
  * @author piotr 03.03.15
@@ -30,6 +31,21 @@ package object util {
     }(ctx)
   }
 
+   def retry[T](n: Int)(block: => T, delay_ms: Long = 1000, base: Long = 2): T = {
+    try {
+      block
+    } catch {
+      case e if n > 1 => {
+        val log: Logger = LoggerFactory.getLogger(this.getClass)
+        log.debug(s"retry block, suspending thread for ${delay_ms} ms")
+        Thread.sleep(delay_ms)
+        retry(n - 1)(block, delay_ms * base, base)
+      }
+    }
+  }
+
+
+  /*
   @annotation.tailrec
   def retry[T](n: Int)(fn: => T): Try[T] = {
     Try { fn } match {
@@ -38,4 +54,5 @@ package object util {
       case f => f
     }
   }
+  */
 }
