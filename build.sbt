@@ -1,7 +1,3 @@
-import AssemblyKeys._
-
-assemblySettings
-
 org.scalastyle.sbt.ScalastylePlugin.Settings
 
 name := "ibclient"
