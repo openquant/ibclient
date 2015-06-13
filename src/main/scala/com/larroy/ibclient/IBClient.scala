@@ -7,7 +7,7 @@ import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
 import com.larroy.ibclient.account.{Value, AccountUpdate, AccountUpdateSubscription}
 import com.larroy.ibclient.handler._
-import com.larroy.ibclient.order.Order
+import com.larroy.ibclient.order.{ExecutionStatus, Order}
 import com.larroy.ibclient.util.{HistoricalRequest, HistoricalRateLimiter, HistoryLimits}
 import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTimeZone, DateTime}
@@ -15,6 +15,7 @@ import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
 
 import org.slf4j.{Logger, LoggerFactory}
+import rx.lang.scala.Observable
 import rx.lang.scala.subjects.PublishSubject
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -60,6 +61,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   private[this] var openOrdersHandler: Option[OpenOrdersHandler] = None
   private[this] var openOrdersPromise: Option[Promise[mutable.Map[Int, OpenOrder]]] = None
+
+  private[this] var orderStatusHandler: OrderStatusHandler = OrderStatusHandler(PublishSubject[OrderStatus]())
 
   private[this] var scannerPromise: Option[Promise[String]] = None
 
@@ -343,10 +346,18 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     openOrdersHandler = None
   }
 
+  /**
+   * @return an observable of OrderStatus changes
+   */
+  def orderStatusObservable(): Observable[OrderStatus] = {
+    orderStatusHandler.subject
+  }
+
   override def orderStatus(orderId: Int, status: String, filled: Int, remaining: Int, avgFillPrice: Double, permId: Int,
     parentId: Int, lastFillPrice: Double, clientId: Int, whyHeld: String
   ): Unit = synchronized {
     log.info(s"OrderStatus ${orderId} ${status}")
+    orderStatusHandler.subject.onNext(OrderStatus(orderId, ExecutionStatus.withName(status), filled, remaining, avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld))
   }
 
   override def deltaNeutralValidation(reqId: Int, underComp: DeltaNeutralContract): Unit = {}
