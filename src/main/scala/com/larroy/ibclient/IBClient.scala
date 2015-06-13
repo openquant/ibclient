@@ -58,6 +58,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   private[this] var accountUpdateHandler: Option[AccountUpdateHandler] = None
 
+  private[this] var openOrdersHandler: Option[OpenOrdersHandler] = None
+  private[this] var openOrdersPromise: Option[Promise[mutable.Map[Int, OpenOrder]]] = None
+
   private[this] var scannerPromise: Option[Promise[String]] = None
 
   val historicalRateLimiter = new HistoricalRateLimiter
@@ -312,27 +315,38 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /**
-   * TODO FIXME
+   * @return a future map of orderId to OpenOrder
    */
-  def openOrders(): Unit = synchronized {
+  def openOrders(): Future[mutable.Map[Int, OpenOrder]] = synchronized {
     if (!eClientSocket.isConnected)
       throw new IBApiError("marketData: Client is not connected")
+    if (openOrdersHandler.nonEmpty)
+      log.warn("openOrders request might be overlapping")
+    openOrdersHandler = Some(new OpenOrdersHandler())
+    openOrdersPromise = Some(Promise[mutable.Map[Int, OpenOrder]])
+    log.debug("openOrders")
     eClientSocket.reqOpenOrders()
+    openOrdersPromise.get.future
+  }
+
+
+  override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = synchronized
+  {
+    openOrdersHandler.foreach { handler ⇒
+      handler.openOrders += (orderId → new OpenOrder(orderId, contract, order, orderState))
+    }
+  }
+
+  override def openOrderEnd(): Unit = synchronized {
+    log.info(s"openOrderEnd")
+    openOrdersHandler.foreach { x ⇒ openOrdersPromise.foreach {_.success(x.openOrders)}}
+    openOrdersHandler = None
   }
 
   override def orderStatus(orderId: Int, status: String, filled: Int, remaining: Int, avgFillPrice: Double, permId: Int,
     parentId: Int, lastFillPrice: Double, clientId: Int, whyHeld: String
   ): Unit = synchronized {
     log.info(s"OrderStatus ${orderId} ${status}")
-  }
-
-  override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = synchronized
-  {
-    log.info(s"openOrder ${orderId} ${contract} ${orderState}")
-  }
-
-  override def openOrderEnd(): Unit = synchronized {
-    log.info(s"openOrderEnd")
   }
 
   override def deltaNeutralValidation(reqId: Int, underComp: DeltaNeutralContract): Unit = {}
