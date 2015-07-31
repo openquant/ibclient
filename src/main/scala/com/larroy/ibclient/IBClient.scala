@@ -28,6 +28,23 @@ import scala.util.{Try, Success, Failure}
  * Most of the calls return a Future of the desired result that is eventually completed sucessfully or with
  * an error describing the problem.
  *
+ * All the exposed interface is nonblocking, some calls return a [[scala.concurrent.Future]] or [[rx.lang.scala.Observable]]
+ *
+ * Example, get realtime bars for EUR.USD:
+ * {{{
+ * import scala.concurrent.Await
+ * import scala.concurrent.duration._
+ * import com.larroy.ibclient.{IBClient}
+ * import com.ib.client.Types.{WhatToShow}
+ * import com.larroy.ibclient.contract.{CashContract}
+ * val ibclient = new IBClient("localhost", 7496, 3)
+ * val connected = Await.result(ibclient.connect(), Duration.Inf)
+ * val subscription = ibclient.realtimeBars(new CashContract("EUR","EUR.USD"), WhatToShow.MIDPOINT)
+ * subscription.observableBar.subscribe({bar=>println(s"got bar ${bar}")}, {error ⇒ throw (error)})
+ * // You get output with the bar prices...
+ * subscription.close
+ * }}}
+ *
  * @param host host where TWS is running
  * @param port port configured in TWS API settings
  * @param clientId an integer to identify this client, a duplicated clientId will cause an error on connect
@@ -70,6 +87,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   val historicalExecutionContext = ExecutionContext.fromExecutor(Executors.newSingleThreadExecutor())
 
   /**
+   * Connects to the TWS API asynchronously
    * @return A Future[Boolean] that is completed once the client is connected and set to true. If it can't connect
    *         it will be set to false
    *
@@ -91,7 +109,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /**
-   * Disconnect from TWS
+   * Disconnect from TWS synchronously
    */
   def disconnect(): Unit = synchronized {
     if (!eClientSocket.isConnected)
@@ -104,7 +122,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    */
   def isConnected: Boolean = eClientSocket.isConnected
 
-  override def nextValidId(id: Int): Unit = synchronized {
+  protected override def nextValidId(id: Int): Unit = synchronized {
     orderId = id
     reqId = orderId + 10000000
     log.debug(s"nextValidId: ${reqId}")
@@ -113,18 +131,18 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /* connection and server ********************************************************************************/
 
-  override def currentTime(time: Long): Unit = {
+  protected override def currentTime(time: Long): Unit = {
     log.debug(s"currentTime: ${time}")
 
   }
 
-  override def connectionClosed(): Unit = {
+  protected override def connectionClosed(): Unit = {
     log.error(s"connectionClosed")
   }
 
   /* error and warnings handling ********************************************************************************/
 
-  override def error(exception: Exception): Unit = synchronized {
+  protected override def error(exception: Exception): Unit = synchronized {
     errorCount += 1
     log.error(s"error handler: ${exception.getMessage}")
     log.error(s"${exception.printStackTrace()}")
@@ -139,7 +157,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     eClientSocket.eDisconnect()
   }
 
-  override def error(reqId: Int, errorCode: Int, errorMsg: String): Unit = synchronized {
+  protected override def error(reqId: Int, errorCode: Int, errorMsg: String): Unit = synchronized {
     if (errorCode > 2000) {
       warnCount += 1
       log.warn(s"Warning ${reqId} ${errorCode} ${errorMsg}")
@@ -181,7 +199,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
-  override def error(str: String): Unit = synchronized {
+  protected override def error(str: String): Unit = synchronized {
     log.error(s"error handler: ${str}")
     errorCount += 1
   }
@@ -206,7 +224,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /// EWrapper handlers
-  override def fundamentalData(reqId: Int, data: String): Unit = synchronized {
+  protected override def fundamentalData(reqId: Int, data: String): Unit = synchronized {
     reqPromise.remove(reqId).foreach { x ⇒
       val promise = x.asInstanceOf[Promise[String]]
       promise.success(data)
@@ -253,7 +271,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
-  override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = synchronized {
+  protected override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = synchronized {
     log.debug(s"tickPrice ${tickerId} ${field} ${price}")
     var handled = false
     reqHandler.get(tickerId).foreach { handler ⇒
@@ -265,39 +283,39 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       log.debug(s"tickPrice ${tickerId} ignored, no handler exists for that tickerId")
   }
 
-  override def tickSize(tickerId: Int, tickType: Int, size: Int): Unit = {
+  protected override def tickSize(tickerId: Int, tickType: Int, size: Int): Unit = {
     log.debug(s"tickSize ${tickerId} ${tickType} ${size}")
     tickPrice(tickerId, tickType, size.toDouble, 0)
   }
 
-  override def tickOptionComputation(tickerId: Int, field: Int, impliedVol: Double, delta: Double, optPrice: Double,
+  protected override def tickOptionComputation(tickerId: Int, field: Int, impliedVol: Double, delta: Double, optPrice: Double,
     pvDividend: Double, gamma: Double, vega: Double, theta: Double, undPrice: Double
   ): Unit = {
     log.debug(s"tickOptionComputation ${tickerId}")
   }
 
-  override def tickGeneric(tickerId: Int, tickType: Int, value: Double): Unit = {
+  protected override def tickGeneric(tickerId: Int, tickType: Int, value: Double): Unit = {
     log.debug(s"tickGeneric ${tickerId} ${tickType} ${value}")
     tickPrice(tickerId, tickType, value, 0)
   }
 
   // TODO
-  override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {
+  protected override def tickString(tickerId: Int, tickType: Int, value: String): Unit = {
     log.debug(s"tickString ${tickerId} ${tickType} ${value}")
   }
 
   // TODO
-  override def tickEFP(tickerId: Int, tickType: Int, basisPoints: Double, formattedBasisPoints: String,
+  protected override def tickEFP(tickerId: Int, tickType: Int, basisPoints: Double, formattedBasisPoints: String,
     impliedFuture: Double, holdDays: Int, futureExpiry: String, dividendImpact: Double, dividendsToExpiry: Double
   ): Unit = {
     log.debug(s"tickEFP ${tickerId} ${tickType} ${basisPoints} ")
   }
 
-  override def tickSnapshotEnd(reqId: Int): Unit = {
+  protected override def tickSnapshotEnd(reqId: Int): Unit = {
     log.debug(s"tickSnapshotEnd ${reqId}")
   }
 
-  override def marketDataType(reqId: Int, marketDataType: Int): Unit = {
+  protected override def marketDataType(reqId: Int, marketDataType: Int): Unit = {
     log.debug(s"marketDataType ${reqId} ${marketDataType}")
   }
 
@@ -333,14 +351,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
 
-  override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = synchronized
+  protected override def openOrder(orderId: Int, contract: Contract, order: IBOrder, orderState: OrderState): Unit = synchronized
   {
     openOrdersHandler.foreach { handler ⇒
       handler.openOrders += (orderId → new OpenOrder(orderId, contract, order, orderState))
     }
   }
 
-  override def openOrderEnd(): Unit = synchronized {
+  protected override def openOrderEnd(): Unit = synchronized {
     log.info(s"openOrderEnd")
     openOrdersHandler.foreach { x ⇒ openOrdersPromise.foreach {_.success(x.openOrders)}}
     openOrdersHandler = None
@@ -348,19 +366,20 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * @return an observable of OrderStatus changes
+   * [[https://www.interactivebrokers.com/en/software/api/apiguide/java/orderstatus.htm]]
    */
   def orderStatusObservable(): Observable[OrderStatus] = {
     orderStatusHandler.subject
   }
 
-  override def orderStatus(orderId: Int, status: String, filled: Int, remaining: Int, avgFillPrice: Double, permId: Int,
+  protected override def orderStatus(orderId: Int, status: String, filled: Int, remaining: Int, avgFillPrice: Double, permId: Int,
     parentId: Int, lastFillPrice: Double, clientId: Int, whyHeld: String
   ): Unit = synchronized {
     log.info(s"OrderStatus ${orderId} ${status}")
     orderStatusHandler.subject.onNext(OrderStatus(orderId, ExecutionStatus.withName(status), filled, remaining, avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld))
   }
 
-  override def deltaNeutralValidation(reqId: Int, underComp: DeltaNeutralContract): Unit = {}
+  protected override def deltaNeutralValidation(reqId: Int, underComp: DeltaNeutralContract): Unit = {}
 
   /* account and portfolio ********************************************************************************/
 
@@ -386,7 +405,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     accountUpdateHandler = None
   }
 
-  override def updateAccountValue(key: String, value: String, currency: String, accountName: String): Unit = {
+  protected override def updateAccountValue(key: String, value: String, currency: String, accountName: String): Unit = {
     log.debug(s"updateAccountValue key: ${key} value: ${value} currency: ${currency} accountName: ${accountName}")
     accountUpdateHandler.foreach { handler ⇒
       Try(value.toDouble) match {
@@ -400,28 +419,28 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   }
 
-  override def updatePortfolio(contract: Contract, position: Int, marketPrice: Double, marketValue: Double,
+  protected override def updatePortfolio(contract: Contract, position: Int, marketPrice: Double, marketValue: Double,
     averageCost: Double, unrealizedPNL: Double, realizedPNL: Double, accountName: String
   ): Unit = {
     log.debug(s"updatePortfolio contract: ${contract} position: ${position} mktPrx: ${marketPrice} mktVal: ${marketValue} avgCost: ${averageCost} unrlzPNL ${unrealizedPNL} realizedPNL ${realizedPNL} accountName: ${accountName}")
   }
 
-  override def updateAccountTime(timeStamp: String): Unit = {
+  protected override def updateAccountTime(timeStamp: String): Unit = {
     log.debug(s"updateAccountTime ${timeStamp}")
   }
 
 
-  override def accountDownloadEnd(accountName: String): Unit = {
+  protected override def accountDownloadEnd(accountName: String): Unit = {
     log.debug(s"accountDownloadEnd ${accountName}")
     log.debug(s"***********************************************************************************")
   }
 
   // response to reqAccountSummary
-  override def accountSummary(reqId: Int, account: String, tag: String, value: String, currency: String): Unit = {
+  protected override def accountSummary(reqId: Int, account: String, tag: String, value: String, currency: String): Unit = {
     log.debug(s"accountSummary reqId: ${reqId} account: ${account} tag: ${tag} value: ${value} currency: ${currency}")
   }
 
-  override def accountSummaryEnd(reqId: Int): Unit = {
+  protected override def accountSummaryEnd(reqId: Int): Unit = {
     log.debug(s"accountSumaryEnd: ${reqId}")
   }
 
@@ -443,13 +462,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     positionsPromise.get.future
   }
 
-  override def position(account: String, contract: Contract, pos: Int, avgCost: Double): Unit = synchronized {
+  protected override def position(account: String, contract: Contract, pos: Int, avgCost: Double): Unit = synchronized {
     positionHandler.foreach { handler ⇒
       handler.queue += new Position(account, contract, pos, avgCost)
     }
   }
 
-  override def positionEnd(): Unit = synchronized {
+  protected override def positionEnd(): Unit = synchronized {
     positionHandler.foreach { ph ⇒
       positionsPromise.foreach(_.success(ph.queue.toIndexedSeq))
     }
@@ -477,7 +496,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /// EWrapper handler
-  override def contractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
+  protected override def contractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
     log.debug(s"contractDetails ${reqId}")
     reqHandler.get(reqId).foreach { x ⇒
       val contractDetailsHandler = x.asInstanceOf[ContractDetailsHandler]
@@ -486,7 +505,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /// EWrapper handler
-  override def contractDetailsEnd(reqId: Int): Unit = {
+  protected override def contractDetailsEnd(reqId: Int): Unit = {
     log.debug(s"contractDetailsEnd ${reqId}")
     reqHandler.remove(reqId).foreach { h ⇒
       val contractDetailsHandler = h.asInstanceOf[ContractDetailsHandler]
@@ -497,40 +516,40 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
-  override def bondContractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
+  protected override def bondContractDetails(reqId: Int, contractDetails: ContractDetails): Unit = {
     this.contractDetails(reqId, contractDetails)
   }
 
   /* executions ********************************************************************************/
   // TODO
 
-  override def execDetails(reqId: Int, contract: Contract, execution: Execution): Unit = {}
+  protected override def execDetails(reqId: Int, contract: Contract, execution: Execution): Unit = {}
 
-  override def execDetailsEnd(reqId: Int): Unit = {}
+  protected override def execDetailsEnd(reqId: Int): Unit = {}
 
-  override def commissionReport(commissionReport: CommissionReport): Unit = {}
+  protected override def commissionReport(commissionReport: CommissionReport): Unit = {}
 
   /* market depth ********************************************************************************/
   // TODO
 
-  override def updateMktDepthL2(tickerId: Int, position: Int, marketMaker: String, operation: Int, side: Int,
+  protected override def updateMktDepthL2(tickerId: Int, position: Int, marketMaker: String, operation: Int, side: Int,
     price: Double, size: Int
   ): Unit = {}
 
-  override def updateMktDepth(tickerId: Int, position: Int, operation: Int, side: Int, price: Double, size: Int
+  protected override def updateMktDepth(tickerId: Int, position: Int, operation: Int, side: Int, price: Double, size: Int
   ): Unit = {}
 
   /* news bulletins ********************************************************************************/
   // TODO
 
-  override def updateNewsBulletin(msgId: Int, msgType: Int, message: String, origExchange: String): Unit = {}
+  protected override def updateNewsBulletin(msgId: Int, msgType: Int, message: String, origExchange: String): Unit = {}
 
   /* financial advisors ********************************************************************************/
   // TODO
 
-  override def managedAccounts(accountsList: String): Unit = {}
+  protected override def managedAccounts(accountsList: String): Unit = {}
 
-  override def receiveFA(faDataType: Int, xml: String): Unit = {}
+  protected override def receiveFA(faDataType: Int, xml: String): Unit = {}
 
   /* historical data ********************************************************************************/
   /**
@@ -735,7 +754,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
   /// EWrapper handlers
-  override def historicalData(
+  protected override def historicalData(
     reqId: Int,
     date: String,
     open: Double, high: Double, low: Double, close: Double,
@@ -773,21 +792,21 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     scannerPromise.get.future
   }
 
-  override def scannerParameters(xml: String): Unit = {
+  protected override def scannerParameters(xml: String): Unit = {
     log.debug(s"scannerParameters ${xml}")
     scannerPromise.foreach { promise ⇒
       promise.success(xml)
     }
   }
 
-  override def scannerData(reqId: Int, rank: Int, contractDetails: ContractDetails, distance: String, benchmark: String,
+  protected override def scannerData(reqId: Int, rank: Int, contractDetails: ContractDetails, distance: String, benchmark: String,
     projection: String, legsStr: String
   ): Unit = {
     log.debug(s"scannerData ${reqId} ${rank} ${contractDetails} ${distance} ${benchmark} ${projection} ${legsStr}")
 
   }
 
-  override def scannerDataEnd(reqId: Int): Unit = {
+  protected override def scannerDataEnd(reqId: Int): Unit = {
     log.debug(s"scannerDataEnd: ${reqId}")
 
   }
@@ -838,7 +857,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   }
 
 
-  override def realtimeBar(reqId: Int, time: Long, open: Double, high: Double, low: Double, close: Double, volume: Long,
+  protected override def realtimeBar(reqId: Int, time: Long, open: Double, high: Double, low: Double, close: Double, volume: Long,
     wap: Double, count: Int
   ): Unit = {
     log.debug(s"realtimeBar id: ${reqId} time: ${time} o: ${open} h: ${high} l: ${low} c: ${close} v: ${volume} w: ${wap} cnt: ${count}")
@@ -856,21 +875,21 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* display groups ********************************************************************************/
   // TODO
 
-  override def displayGroupList(reqId: Int, groups: String): Unit = {}
+  protected override def displayGroupList(reqId: Int, groups: String): Unit = {}
 
-  override def displayGroupUpdated(reqId: Int, contractInfo: String): Unit = {}
-
-  /* ********************************************************************************/
-  // TODO
-
-  override def verifyAndAuthMessageAPI(apiData: String, xyzChallange: String): Unit = {}
-
-  override def verifyCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
+  protected override def displayGroupUpdated(reqId: Int, contractInfo: String): Unit = {}
 
   /* ********************************************************************************/
   // TODO
 
-  override def verifyAndAuthCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
+  protected override def verifyAndAuthMessageAPI(apiData: String, xyzChallange: String): Unit = {}
 
-  override def verifyMessageAPI(apiData: String): Unit = {}
+  protected override def verifyCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
+
+  /* ********************************************************************************/
+  // TODO
+
+  protected override def verifyAndAuthCompleted(isSuccessful: Boolean, errorText: String): Unit = {}
+
+  protected override def verifyMessageAPI(apiData: String): Unit = {}
 }
