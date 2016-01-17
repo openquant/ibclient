@@ -112,7 +112,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     * Connects to TWS blocking until the connection is established or throwing an exception when connection fails
     * @throws IBClientError
     */
-  def connectBlocking(timeout_s: Int = 5): IBClient = synchronized {
+  def connectBlocking(timeout_s: Int = 5): IBClient = {
     val connected = Await.result(connect(), Duration(timeout_s, SECONDS))
     assert(connected)
     this
