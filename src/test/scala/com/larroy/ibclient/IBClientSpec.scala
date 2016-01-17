@@ -22,15 +22,13 @@ import org.specs2.mutable._
 class IBClientSpec extends Specification {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
   val cfg = ConfigFactory.load().getConfig("ibclient.test")
-  val ibclient = connectedClient
+
+  val ibclient: IBClient = {
+    var (host, port, clientId) = (cfg.getString("tws.host"), cfg.getInt("tws.port"), cfg.getInt("tws.clientId"))
+    new IBClient(host, port, clientId).connectBlocking(cfg.getInt("tws.timeout_s"))
+  }
 
   def testWaitDuration = Duration(cfg.getInt("tws.timeout_s"), SECONDS)
-
-  def connectedClient: IBClient = {
-    val ibclient = new IBClient(cfg.getString("tws.host"), cfg.getInt("tws.port"), cfg.getInt("tws.clientId"))
-    Await.result(ibclient.connect(), testWaitDuration)
-    ibclient
-  }
 
   def testStockContract: StockContract = {
     new StockContract(

@@ -102,10 +102,20 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       log.warn("connect: Client already connected")
       Future.successful[Boolean](true)
     } else {
-      eClientSocket.eConnect(host, port, clientId)
       connectResult = Promise[Boolean]()
+      eClientSocket.eConnect(host, port, clientId)
       connectResult.future
     }
+  }
+
+  /**
+    * Connects to TWS blocking until the connection is established or throwing an exception when connection fails
+    * @throws IBClientError
+    */
+  def connectBlocking(timeout_s: Int = 5): IBClient = synchronized {
+    val connected = Await.result(connect(), Duration(timeout_s, SECONDS))
+    assert(connected)
+    this
   }
 
   /**
@@ -610,22 +620,26 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
             throw new PacingViolationRetryLimitException
           }
 
-          // Other failure, but we have some results
+          // Other failure, no results, as we iterate in reverse this means the first one fails, so we fail
           case Some(Failure(error)) if cumResult.isEmpty ⇒ {
             resultPromise.failure(error)
           }
 
-          // Other failure, no results
+          // Other failure, partial results, the first must have succeeded, we return some results
           case Some(Failure(error)) ⇒ {
-            log.warn(s"Partial history request failure: ${request} this means some requests failed but others succeeded")
+            log.warn(s"historicalData request failure (there were successful ones): ${request}")
           }
 
           // Success
           case Some(Success(bars)) ⇒ {
-            log.debug("historicalData succes")
+            log.info(s"historicalData request successful: ${request}")
             cumResult ++= bars.reverse
           }
         }
+      }
+      def whenAcceptableException(e: Throwable): Boolean = e match {
+        case error: IBApiError if error.code == -1 && error.msg.matches("marketData: Client is not connected") ⇒ false
+        case _ ⇒ true
       }
       def run(): Unit = {
         log.debug(s"easyHistoricalData, durations: ${endDatesDurations}")
@@ -637,7 +651,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
           if (nextAfter_ms > 0)
             Thread.sleep(nextAfter_ms)
           val waitTime = Duration(cfg.as[Int]("historyRequestPacingViolationRetry.length"), cfg.as[String]("historyRequestPacingViolationRetry.unit"))
-          util.retry(cfg.as[Int]("historyRequestPacingViolationRetry.count"))(doRequest(request), waitTime.toMillis)
+          util.retryWhen(cfg.as[Int]("historyRequestPacingViolationRetry.count"))(doRequest(request), whenAcceptableException, waitTime.toMillis)
         }
         resultPromise.success(cumResult.reverseIterator.toVector)
       }

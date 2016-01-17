@@ -37,12 +37,28 @@ package object util {
     } catch {
       case e if n > 1 => {
         val log: Logger = LoggerFactory.getLogger(this.getClass)
-        log.debug(s"retry block, suspending thread for ${delay_ms} ms")
+        log.debug(s"retry block: suspending thread for ${delay_ms} ms")
+        log.debug(s"\texception was: ${e.toString}")
         Thread.sleep(delay_ms)
         retry(n - 1)(block, delay_ms * base, base)
       }
     }
   }
+
+  def retryWhen[T](n: Int)(block: => T, when: (Throwable) ⇒ Boolean, delay_ms: Long = 1000, base: Long = 2): T = {
+    try {
+      block
+    } catch {
+      case e if n > 1 && when(e) ⇒ {
+        val log: Logger = LoggerFactory.getLogger(this.getClass)
+        log.debug(s"retry block: suspending thread for ${delay_ms} ms")
+        log.debug(s"\texception was: ${e.toString}")
+        Thread.sleep(delay_ms)
+        retry(n - 1)(block, delay_ms * base, base)
+      }
+    }
+  }
+
 
 
   /*
