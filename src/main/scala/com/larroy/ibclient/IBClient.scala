@@ -603,13 +603,14 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         barsFuture.value match {
           // Promise not completed, timeout
           case None ⇒ {
-            log.debug("Promise not completed, timeout")
-            resultPromise.failure(new IBClientError(s"History request timeout ${request}"))
+            log.error(s"easyHistoricalData: timeout for request: ${request}")
+            if (! resultPromise.isCompleted)
+              resultPromise.failure(new IBClientError(s"History request timeout ${request}"))
           }
 
           // No Data
           case Some(Failure(error: IBApiError)) if error.code == 162 && error.msg.matches("Historical Market Data Service error message:HMDS query returned no data.*") ⇒ {
-            log.warn(s"easyHistoricalData: History request ${request} returned no data")
+            log.error(s"easyHistoricalData: History request ${request} returned no data")
           }
 
           // Pacing violation
@@ -622,12 +623,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
           // Other failure, no results, as we iterate in reverse this means the first one fails, so we fail
           case Some(Failure(error)) if cumResult.isEmpty ⇒ {
-            resultPromise.failure(error)
+            if (! resultPromise.isCompleted)
+              resultPromise.failure(error)
           }
 
           // Other failure, partial results, the first must have succeeded, we return some results
           case Some(Failure(error)) ⇒ {
-            log.warn(s"historicalData request failure (there were successful ones): ${request}")
+            log.error(s"historicalData request failure (there were successful ones): ${request}")
           }
 
           // Success
@@ -653,7 +655,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
           val waitTime = Duration(cfg.as[Int]("historyRequestPacingViolationRetry.length"), cfg.as[String]("historyRequestPacingViolationRetry.unit"))
           util.retryWhen(cfg.as[Int]("historyRequestPacingViolationRetry.count"))(doRequest(request), whenAcceptableException, waitTime.toMillis)
         }
-        resultPromise.success(cumResult.reverseIterator.toVector)
+        if (! resultPromise.isCompleted)
+          resultPromise.success(cumResult.reverseIterator.toVector)
       }
     }
     historicalExecutionContext.execute(historyRequestAggregation)
