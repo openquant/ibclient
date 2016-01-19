@@ -97,6 +97,8 @@ class HistoricalRateLimiter {
     // restriction 3
     after_ms = Math.max(after_ms, nextSlot_ms(10L * 60 * 1000, 60, None, reftime_ms))
     log.debug(s"delayed ${after_ms} no more than 60 in 10 min")
+    if (after_ms > 0)
+      log.info(s"HistoricalRateLimiter, delaying request for ${after_ms/1000} s.")
     after_ms
   }
 

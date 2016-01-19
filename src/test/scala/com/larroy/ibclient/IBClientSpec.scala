@@ -65,6 +65,17 @@ class IBClientSpec extends Specification {
       hist must not be empty
     }
 
+    "get easy historical data in order" in {
+      import org.joda.time._
+      val stockContract = testStockContract
+      val startDate = new DateTime(2008, 3, 3, 15, 0).toDate
+      val endDate = new DateTime(2015, 12, 31, 15, 0).toDate
+      val res = ibclient.easyHistoricalData(stockContract, startDate, endDate, BarSize._1_day, WhatToShow.TRADES)
+      val hist = Await.result(res, testWaitDuration)
+      hist must not be empty
+      hist mustEqual hist.sorted(Ordering[Bar].reverse)
+    }
+
     "market data" in {
       val result = ArrayBuffer.empty[Tick]
       val subscription = ibclient.marketData(new CashContract("EUR", "EUR.USD"))

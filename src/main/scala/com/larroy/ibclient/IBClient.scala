@@ -590,8 +590,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     whatToShow: WhatToShow,
     rthOnly: Boolean = false): Future[IndexedSeq[Bar]] = synchronized {
 
-    val historyDuration = HistoryLimits.bestDuration(startDate, endDate, barSize)
     val resultPromise = Promise[IndexedSeq[Bar]]()
+    if (startDate.after(endDate)) {
+      resultPromise.failure(new IBApiError("easyHistoricalData: startDate must be before endDate"))
+      return resultPromise.future
+    }
+    val historyDuration = HistoryLimits.bestDuration(startDate, endDate, barSize)
     case class PacingViolationRetryLimitException() extends Exception()
     val historyRequestAggregation = new Runnable {
       val cumResult = mutable.Queue.empty[Bar]
@@ -633,7 +637,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
           // Success
           case Some(Success(bars)) ⇒ {
             log.info(s"historicalData request successful: ${request}")
-            cumResult ++= bars.reverse
+            cumResult ++= bars
           }
         }
       }
