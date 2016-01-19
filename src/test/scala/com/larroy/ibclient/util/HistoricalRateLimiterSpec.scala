@@ -14,7 +14,7 @@ class HistoricalRateLimiterSpec extends Specification {
     "limit requests" in {
       val rl = new HistoricalRateLimiter
       rl.nextSlot_ms(10, 2) mustEqual 0L
-      val request = new HistoricalRequest("SPY", "GLOBEX", new Date(), DurationUnit.DAY, BarSize._10_mins, 5)
+      val request = new HistoricalRequest("SPY", "GLOBEX", new Date(), 5, DurationUnit.DAY, BarSize._10_mins)
 
       val now = rl.now_ms
       rl.requested(request, Some(now))
@@ -31,12 +31,12 @@ class HistoricalRateLimiterSpec extends Specification {
     "honor ib limits" in {
       val rl = new HistoricalRateLimiter
       val date = new Date()
-      val request = new HistoricalRequest("SPY", "GLOBEX", date, DurationUnit.DAY, BarSize._10_mins, 5)
+      val request = new HistoricalRequest("SPY", "GLOBEX", date, 5, DurationUnit.DAY, BarSize._10_mins)
       rl.nextRequestAfter_ms(request) mustEqual 0L
       rl.requested(request)
       rl.nextRequestAfter_ms(request) must beGreaterThan(0L)
 
-      val request2 = new HistoricalRequest("CL", "NYMEX", date, DurationUnit.DAY, BarSize._10_mins, 5)
+      val request2 = new HistoricalRequest("CL", "NYMEX", date, 5, DurationUnit.DAY, BarSize._10_mins)
       rl.nextRequestAfter_ms(request2) mustEqual 0L
       rl.requested(request2)
       rl.nextRequestAfter_ms(request2) must beGreaterThan(0L)

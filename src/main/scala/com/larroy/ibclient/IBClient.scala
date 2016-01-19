@@ -591,14 +591,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     rthOnly: Boolean = false): Future[IndexedSeq[Bar]] = synchronized {
 
     val historyDuration = HistoryLimits.bestDuration(startDate, endDate, barSize)
-    val durationUnit = historyDuration.durationUnit
-    val endDatesDurations = historyDuration.endDates(endDate).zip(historyDuration.durations)
     val resultPromise = Promise[IndexedSeq[Bar]]()
     case class PacingViolationRetryLimitException() extends Exception()
     val historyRequestAggregation = new Runnable {
       val cumResult = mutable.Queue.empty[Bar]
       def doRequest(request: HistoricalRequest): Unit = {
-        val barsFuture = historicalData(contract, request.endDate, request.duration, durationUnit, barSize, whatToShow, rthOnly, false)
+        val barsFuture = historicalData(contract, request.endDate, request.duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly, false)
         Await.ready(barsFuture, Duration(cfg.as[Int]("historyRequestTimeout.length"), cfg.as[String]("historyRequestTimeout.unit")))
         barsFuture.value match {
           // Promise not completed, timeout
@@ -644,11 +642,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         case _ ⇒ true
       }
       def run(): Unit = {
+        val endDatesDurations = historyDuration.endDates(endDate).zip(historyDuration.durations)
         log.debug(s"easyHistoricalData, durations: ${endDatesDurations}")
         endDatesDurations.reverseIterator.foreach { dateDuration ⇒
           val endDate = dateDuration._1
           val duration = dateDuration._2
-          val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, durationUnit, barSize, duration)
+          val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, duration, historyDuration.durationUnit, barSize)
           val nextAfter_ms = historicalRateLimiter.registerAndGetWait_ms(request)
           if (nextAfter_ms > 0)
             Thread.sleep(nextAfter_ms)
@@ -745,7 +744,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val dateTime = new DateTime(endDate, DateTimeZone.UTC)
     // format yyyymmdd hh:mm:ss tmz, where the time zone is allowed (optionally) after a space at the end.
     val dateStr = DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss z").print(dateTime)
-    val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, durationUnit, barSize, duration)
+    val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, duration, durationUnit, barSize)
 
     def doRequest = {
       log.debug(s"reqHistoricalData reqId: ${reqId} endDate: ${dateStr} symbol: ${contract.symbol} duration: ${duration} barSize: ${barSize}")
