@@ -779,8 +779,8 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     wap: Double,
     hasGaps: Boolean
   ): Unit = {
-    /*  Even though we specify formatDate as 2 which accordint to the API should always return seconds since the epoch it's not respected
-        When asking for DurationUnit.DAY and BarSize._1_day  we get dates in yyyyymmdd format
+    /*  Even though we specify formatDate as 2 which according to the API should always return seconds since the epoch it's not respected
+        When asking for DurationUnit.DAY and BarSize._1_day we get dates in yyyyymmdd format
      */
 
     //log.debug(s"historicalData ${reqId} ${date}")
