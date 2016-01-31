@@ -273,7 +273,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @param id id of the [[MarketDataSubscription]]
    */
   def closeMarketData(id: Int): Unit = synchronized {
-    reqHandler.remove(id).foreach { handler ⇒
+    reqHandler.remove(id).foreach { handler
       val marketDataHandler = handler.asInstanceOf[MarketDataHandler]
       eClientSocket.cancelMktData(id)
       log.debug(s"Closed market data line ${id}")
