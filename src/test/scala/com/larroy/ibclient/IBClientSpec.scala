@@ -128,7 +128,7 @@ class IBClientSpec extends Specification {
       val bar = Option(bars.poll(3, TimeUnit.SECONDS))
       subscription.close
       if (bar.isEmpty)
-        log.warn("We didn't recieve market data, are we outside RTH?")
+        log.warn("We didn't receive market data, are we outside RTH?")
       //(bar must not be empty).setMessage("We didn't receive market data")
       success
     }

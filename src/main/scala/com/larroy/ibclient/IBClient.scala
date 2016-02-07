@@ -109,9 +109,23 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
     * Connects to TWS blocking until the connection is established or throwing an exception when connection fails
-    * @throws IBClientError
     */
   def connectBlocking(timeout_s: Int = 5): IBClient = Await.result(connect(), Duration(timeout_s, SECONDS))
+
+
+  /**
+    * Fail all open requests and promises
+    * @param error
+    */
+  def failEverything(error: Throwable): Unit = synchronized {
+    reqPromise.foreach { kv ⇒
+      val promise = kv._2.asInstanceOf[Promise[_]]
+      promise.failure(error)
+    }
+    reqPromise.clear()
+    reqHandler.foreach { kv ⇒ kv._2.error(error) }
+    reqHandler.clear()
+  }
 
   /**
    * Disconnect from TWS synchronously
@@ -120,6 +134,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     if (!eClientSocket.isConnected)
       log.warn("disconnect: Client is not connected")
     eClientSocket.eDisconnect()
+    failEverything(new IBClientError("User initiated disconnect"))
+  }
+
+  def reconnect(): Future[IBClient] = {
+    disconnect()
+    connect()
   }
 
   /**
@@ -138,11 +158,11 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   protected override def currentTime(time: Long): Unit = {
     log.debug(s"currentTime: ${time}")
-
   }
 
   protected override def connectionClosed(): Unit = {
     log.error(s"connectionClosed")
+    failEverything(new IBClientError("connectionClosed by eClientSocket"))
   }
 
   /* error and warnings handling ********************************************************************************/
@@ -152,21 +172,23 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     log.error(s"error handler: ${exception.getMessage}")
     log.error(s"${exception.printStackTrace()}")
     connectResult.failure(exception)
-    reqPromise.foreach { kv ⇒
-      val promise = kv._2.asInstanceOf[Promise[_]]
-      promise.failure(exception)
-    }
-    reqPromise.clear()
-    reqHandler.foreach { kv ⇒ kv._2.error(exception)}
-    reqHandler.clear()
+    failEverything(exception)
     eClientSocket.eDisconnect()
   }
 
+  /**
+    * Errors for a particular request or with reqId = -1 for no particular request when connecting (WTF)
+    * @param reqId
+    * @param errorCode
+    * @param errorMsg
+    */
   protected override def error(reqId: Int, errorCode: Int, errorMsg: String): Unit = synchronized {
     if (errorCode > 2000) {
+      // In this case is a warning WTF!!
       warnCount += 1
       log.warn(s"Warning ${reqId} ${errorCode} ${errorMsg}")
     } else {
+      // "Real" error, great API design right here
       errorCount += 1
       val errmsg = s"Error requestId: ${reqId} code: ${errorCode} msg: ${errorMsg}"
       log.error(errmsg)
@@ -179,13 +201,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         if (connectResult.isCompleted) {
           // if we were not connecting we fail everything in flight
           // FIXME: improve in the case of connection lost / restored
-          reqPromise.foreach { kv ⇒
-            val promise = kv._2.asInstanceOf[Promise[_]]
-            promise.failure(apierror)
-          }
-          reqPromise.clear()
-          reqHandler.foreach { kv ⇒ kv._2.error(apierror)}
-          reqHandler.clear()
+          failEverything(apierror)
         } else
           connectResult.failure(apierror)
 
