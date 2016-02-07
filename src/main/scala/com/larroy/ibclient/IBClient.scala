@@ -18,7 +18,6 @@ import org.slf4j.{Logger, LoggerFactory}
 import rx.lang.scala.Observable
 import rx.lang.scala.subjects.PublishSubject
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Promise, Future}
 import scala.util.{Try, Success, Failure}
@@ -575,7 +574,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @param whatToShow Determines the nature of data being extracted.
    *                   One of: [TRADES, MIDPOINT, BID, ASK] for realtime bars and [BID_ASK, HISTORICAL_VOLATILITY, OPTION_IMPLIED_VOLATILITY, YIELD_ASK, YIELD_BID, YIELD_BID_ASK, YIELD_LAST]
    * @param rthOnly only data from regular trading hours if true
-   * @param ctx execution context where futures for intermediate requests are scheduled when they have to be deferred
    * @return
    */
   def easyHistoricalData(
