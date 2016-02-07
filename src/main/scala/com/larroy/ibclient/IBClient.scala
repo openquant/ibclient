@@ -59,7 +59,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   var errorCount: Int = 0
   var warnCount: Int = 0
 
-  private[this] var connectResult = Promise[Boolean]()
+  private[this] var connectResult = Promise[IBClient]()
 
   /**
    * A map of request id to Promise
@@ -97,12 +97,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    *        val connected = Await.result(ibclient.connect(), testWaitDuration)
    * }}}
    */
-  def connect(): Future[Boolean] = synchronized {
+  def connect(): Future[IBClient] = synchronized {
     if (eClientSocket.isConnected) {
       log.warn("connect: Client already connected")
-      Future.successful[Boolean](true)
+      Future.successful[IBClient](this)
     } else {
-      connectResult = Promise[Boolean]()
+      connectResult = Promise[IBClient]()
       eClientSocket.eConnect(host, port, clientId)
       connectResult.future
     }
@@ -112,11 +112,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     * Connects to TWS blocking until the connection is established or throwing an exception when connection fails
     * @throws IBClientError
     */
-  def connectBlocking(timeout_s: Int = 5): IBClient = {
-    val connected = Await.result(connect(), Duration(timeout_s, SECONDS))
-    assert(connected)
-    this
-  }
+  def connectBlocking(timeout_s: Int = 5): IBClient = Await.result(connect(), Duration(timeout_s, SECONDS))
 
   /**
    * Disconnect from TWS synchronously
@@ -136,7 +132,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     orderId = id
     reqId = orderId + 10000000
     log.debug(s"nextValidId: ${reqId}")
-    connectResult.success(true)
+    connectResult.success(this)
   }
 
   /* connection and server ********************************************************************************/
@@ -273,7 +269,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @param id id of the [[MarketDataSubscription]]
    */
   def closeMarketData(id: Int): Unit = synchronized {
-    reqHandler.remove(id).foreach { handler
+    reqHandler.remove(id).foreach { handler ⇒
       val marketDataHandler = handler.asInstanceOf[MarketDataHandler]
       eClientSocket.cancelMktData(id)
       log.debug(s"Closed market data line ${id}")

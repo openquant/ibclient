@@ -22,9 +22,9 @@ import org.specs2.mutable._
 class IBClientSpec extends Specification {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
   val cfg = ConfigFactory.load().getConfig("ibclient.test")
+  var (host, port, clientId) = (cfg.getString("tws.host"), cfg.getInt("tws.port"), cfg.getInt("tws.clientId"))
 
   val ibclient: IBClient = {
-    var (host, port, clientId) = (cfg.getString("tws.host"), cfg.getInt("tws.port"), cfg.getInt("tws.clientId"))
     new IBClient(host, port, clientId).connectBlocking(cfg.getInt("tws.timeout_s"))
   }
 
@@ -131,6 +131,10 @@ class IBClientSpec extends Specification {
         log.warn("We didn't recieve market data, are we outside RTH?")
       //(bar must not be empty).setMessage("We didn't receive market data")
       success
+    }
+    "return a failed future when it can't connect" in {
+      val futureIBclient = new IBClient("host.invalid", port, clientId).connect()
+      Await.result(futureIBclient, testWaitDuration) must throwAn[Exception]
     }
   }
 }
