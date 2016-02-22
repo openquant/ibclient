@@ -8,7 +8,7 @@ class CaseClassBeautifierSpec extends Specification {
   "CaseClassBeautifierSpec" should {
     "do" in {
       val c = C("h", 1)
-      CaseClassBeautifier.nice(c) should_==("C(a = h, b = 1)")
+      CaseClassBeautifier(c) should_==("C(a = h, b = 1)")
     }
   }
 }

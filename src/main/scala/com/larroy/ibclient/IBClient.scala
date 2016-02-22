@@ -8,7 +8,7 @@ import com.ib.client.{Order ⇒ IBOrder, _}
 import com.larroy.ibclient.account.{Value, AccountUpdate, AccountUpdateSubscription}
 import com.larroy.ibclient.handler._
 import com.larroy.ibclient.order.{ExecutionStatus, Order}
-import com.larroy.ibclient.util.{HistoricalRequest, HistoricalRateLimiter, HistoryLimits}
+import com.larroy.ibclient.util.{CaseClassBeautifier, HistoricalRequest, HistoricalRateLimiter, HistoryLimits}
 import org.joda.time.format.DateTimeFormat
 import org.joda.time.{DateTimeZone, DateTime}
 import com.typesafe.config.ConfigFactory
@@ -87,9 +87,9 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * Connects to the TWS API asynchronously
+ *
    * @return A Future[Boolean] that is completed once the client is connected and set to true. If it can't connect
    *         it will be set to false
-   *
    * @example
    * {{{
    *        val ibclient = new IBClient("localhost", 7496, 1)
@@ -115,6 +115,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
     * Fail all open requests and promises
+ *
     * @param error
     */
   def failEverything(error: Throwable): Unit = synchronized {
@@ -178,6 +179,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
     * Errors for a particular request or with reqId = -1 for no particular request when connecting (WTF)
+ *
     * @param reqId
     * @param errorCode
     * @param errorMsg
@@ -230,6 +232,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * Request fundamentals
+ *
    * @param contract
    * @param typ any of ReportSnapshot, ReportsFinSummary, ReportRatios, ReportsFinStatements, RESC, CalendarReport
    * @return a future string, completed with the data
@@ -258,6 +261,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * Request market data for the given contract
+ *
    * @param contract
    * @return a [[MarketDataSubscription]] which contains an Rx observable through which the [[Tick]] is delivered
    *         when is available. This allows to handle market data asynchronously by using reactive programming patterns.
@@ -344,6 +348,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * Submit an order for the given contract
+ *
    * @param contract
    * @param order  @see [[order.Order]]
    */
@@ -406,6 +411,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * There can be only one AccountUpdateSubscription, getting more than one will prevent the previous from receiving updates
+ *
    * @param account The account id, empty by default which returns this account
    * @return
    */
@@ -469,6 +475,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * Request info about positions @see [[Position]]
+ *
    * @return future of positions
    */
   def positions(): Future[IndexedSeq[Position]] = synchronized {
@@ -500,6 +507,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * Get [[ib.client.ContractDetails]] for the given contract
+ *
    * @param contract
    * @return contract details for the given contract
    */
@@ -615,21 +623,21 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         barsFuture.value match {
           // Promise not completed, timeout
           case None ⇒ {
-            log.error(s"easyHistoricalData: timeout for request: ${request}")
+            log.error(s"easyHistoricalData: timeout for request: ${CaseClassBeautifier(request)}")
             if (! resultPromise.isCompleted)
-              resultPromise.failure(new IBClientError(s"History request timeout ${request}"))
+              resultPromise.failure(new IBClientError(s"History request timeout ${CaseClassBeautifier(request)}"))
           }
 
           // No Data
           case Some(Failure(error: IBApiError)) if error.code == 162 && error.msg.matches("Historical Market Data Service error message:HMDS query returned no data.*") ⇒ {
-            log.error(s"easyHistoricalData: History request ${request} returned no data")
+            log.error(s"easyHistoricalData: History request ${CaseClassBeautifier(request)} returned no data")
           }
 
           // Pacing violation
           case Some(Failure(error: IBApiError)) if error.code == 162 && error.msg.matches("Historical Market Data Service error message:Historical data request pacing violation.*") ⇒ {
             //log.warn(s"easyHistoricalData: Pacing violation for request: ${request}, suspending for: ${waitTime}")
             //Thread.sleep(waitTime.toMillis)
-            log.warn(s"easyHistoricalData: Pacing violation for request: ${request}")
+            log.warn(s"easyHistoricalData: Pacing violation for request: ${CaseClassBeautifier(request)}")
             throw new PacingViolationRetryLimitException
           }
 
@@ -641,12 +649,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
           // Other failure, partial results, the first must have succeeded, we return some results
           case Some(Failure(error)) ⇒ {
-            log.error(s"historicalData request FAILURE for ${request}")
+            log.error(s"historicalData request FAILURE for ${CaseClassBeautifier(request)}")
           }
 
           // Success
           case Some(Success(bars)) ⇒ {
-            log.info(s"historicalData request SUCCESSFUL, got ${bars.length} for ${request}")
+            log.info(s"historicalData request SUCCESSFUL, got ${bars.length} bars for ${CaseClassBeautifier(request)}")
             cumResult ++= bars
           }
         }
@@ -730,7 +738,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * [[https://www.interactivebrokers.com/en/software/api/apiguide/tables/historical_data_limitations.htm]]
    *
    * @see [[util.HistoryLimits]] to retrieve maximum duration for a given combination
-   *
    * @param contract
    * @param endDate
    * @param duration number of durationUnit to request
@@ -845,6 +852,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* realtime bars ********************************************************************************/
   /**
    * Request a realtime bar covering 5 seconds of market activity
+ *
    * @param contract
    * @param whatToShow
    * @param rthOnly use only regular trading hours

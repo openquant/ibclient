@@ -8,7 +8,7 @@ object CaseClassBeautifier  {
     case m: MethodSymbol if m.isCaseAccessor => m
   }.toList
 
-  def nice[T:TypeTag](x: T)(implicit classTag: ClassTag[T]) : String = {
+  def apply[T:TypeTag](x: T)(implicit classTag: ClassTag[T]) : String = {
     val instance = x.asInstanceOf[T]
     val mirror = runtimeMirror(instance.getClass.getClassLoader)
     val accessors = getCaseAccessors[T]
