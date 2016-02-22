@@ -21,7 +21,10 @@ import org.specs2.mutable._
 
 class IBClientSpec extends Specification {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
-  val cfg = ConfigFactory.load().getConfig("ibclient.test")
+  private val cfg = ConfigFactory.load()
+    .withFallback(ConfigFactory.parseString(defaultConfig))
+    .getConfig("ibclient")
+
   var (host, port, clientId) = (cfg.getString("tws.host"), cfg.getInt("tws.port"), cfg.getInt("tws.clientId"))
 
   val ibclient: IBClient = {

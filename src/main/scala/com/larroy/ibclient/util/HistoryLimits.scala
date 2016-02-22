@@ -4,6 +4,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 
 import com.ib.client.Types.{DurationUnit, BarSize, WhatToShow}
+import com.larroy.ibclient
 import com.larroy.ibclient.{IBApiError, IBClient}
 import com.larroy.ibclient.contract.StockContract
 import com.typesafe.config.ConfigFactory
@@ -16,7 +17,9 @@ import scala.util.{Success, Failure}
 import net.ceedubs.ficus.Ficus._
 
 object HistoryLimits {
-  private[this] val cfg = ConfigFactory.load().getConfig("ibclient.historyLimits")
+  private[this] val cfg = ConfigFactory.load()
+    .withFallback(ConfigFactory.parseString(ibclient.defaultConfig))
+    .getConfig("ibclient.historyLimits")
 
   /**
    * @param durationUnit
@@ -28,6 +31,7 @@ object HistoryLimits {
     val path = s"${durationUnit.name}.${barSize.name}"
     cfg.as[Option[Int]](path)
   }
+
   def bestDuration(startDate: Date, endDate: Date, barSize: BarSize): HistoryDuration = {
     import org.joda.time._
     val endDateTime = new DateTime(endDate)
@@ -72,11 +76,15 @@ object HistoryLimits {
 
 /**
  * @author piotr 01.03.15
- * History limits are not clearly documented, this class can automatically find the limits
+ * History limits are not clearly documented, this class can automatically find the limits via calibrate
  */
 class HistoryLimits {
+  import com.larroy.ibclient.defaultConfig
   private[this] val log: Logger = LoggerFactory.getLogger(this.getClass)
-  private[this] val cfg = ConfigFactory.load().getConfig("ibclient.test")
+  private[this] val cfg = ConfigFactory.load()
+    .withFallback(ConfigFactory.parseString(defaultConfig))
+    .getConfig("ibclient")
+
   private[this] val ibclient = connectedClient
   private[this] val endDate = new Date()
   private[this] val contract = testStockContract
@@ -108,8 +116,8 @@ class HistoryLimits {
         log.debug(s"fail")
         false
       }
-      case Some(Success(_)) ⇒ {
-        log.debug(s"success")
+      case Some(Success(bars)) ⇒ {
+        log.debug(s"success, ${bars.size} bars")
         true
       }
       case _ ⇒ {
@@ -134,6 +142,10 @@ class HistoryLimits {
     validDurations
   }
 
+  /**
+    * Finds the maximum set of [[ValidDurations]] for history requests
+    * @return
+    */
   def calibrate(): Seq[ValidDurations] = {
     val barsizes = Array[BarSize](BarSize._15_mins, BarSize._1_hour, BarSize._4_hours, BarSize._1_day, BarSize._1_week)
     val durations = DurationUnit.values().drop(1)

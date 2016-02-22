@@ -5,6 +5,7 @@ import java.util.{Collections, Date, ArrayList}
 
 import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
+import com.larroy.ibclient
 import com.larroy.ibclient.account.{Value, AccountUpdate, AccountUpdateSubscription}
 import com.larroy.ibclient.handler._
 import com.larroy.ibclient.order.{ExecutionStatus, Order}
@@ -50,7 +51,14 @@ import scala.util.{Try, Success, Failure}
  */
 class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrapper {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
-  private val cfg = ConfigFactory.load().getConfig("ibclient")
+  private val cfg = ConfigFactory.load()
+    .withFallback(ConfigFactory.parseString(defaultConfig))
+    .getConfig("ibclient")
+
+  cfg.checkValid(ConfigFactory.parseString(ibclient.defaultConfig).getConfig("ibclient"))
+
+
+
   val eClientSocket = new EClientSocket(this)
   var reqId: Int = 0
   var orderId: Int = 0

@@ -5,5 +5,74 @@ package com.larroy
  * [[com.larroy.ibclient.IBClient]] is the main class to access IB from Scala
  */
 package object ibclient {
+  val defaultConfig =
+    s"""
+       |ibclient {
+       |    tws {
+       |      host = "localhost"
+       |      port = 7496
+       |      clientId = 3
+       |      timeout_s = 60
+       |    }
+       |    params {
+       |      stock {
+       |        contract = "SPY"
+       |        exchange = "SMART"
+       |        currency = "USD"
+       |      }
+       |      future {
+       |        contract = "CL"
+       |        exchange = "NYMEX"
+       |        currency = "USD"
+       |      }
+       |    }
+       |    historyRequestTimeout {
+       |        length = 2
+       |        unit = "min"
+       |    }
+       |    historyRequestPacingViolationRetry {
+       |        length = 60
+       |        unit = "s"
+       |        count = 4
+       |    }
+       |    historyLimits {
+       |        SECOND._5_secs = 10000
+       |        SECOND._10_secs = 10000
+       |        SECOND._15_secs = 10000
+       |        SECOND._30_secs = 10000
+       |        SECOND._1_min = 86400
+       |        SECOND._2_mins = 86400
+       |        SECOND._3_mins = 86400
+       |        SECOND._5_mins = 86400
+       |        SECOND._10_mins = 86400
+       |        SECOND._15_mins = 86400
+       |        SECOND._30_mins = 86400
+       |        SECOND._1_hour = 86400
+       |
+       |        DAY._30_secs = 1
+       |        DAY._1_min = 10
+       |        DAY._5_mins = 10
+       |        DAY._15_mins = 20
+       |        DAY._1_hour = 34
+       |        DAY._4_hour = 34
+       |        DAY._1_day = 60
+       |
+       |        WEEK._15_mins = 2
+       |        WEEK._1_hour = 4
+       |        WEEK._4_hours = 4
+       |        WEEK._1_day = 52
+       |        WEEK._1_week = 52
+       |
+       |        MONTH._1_hour= 1
+       |        MONTH._4_hours = 1
+       |        MONTH._1_day = 12
+       |        MONTH._1_week = 12
+       |
+       |        YEAR._1_day = 5
+       |        YEAR._1_week = 5
+       |    }
+       |}
+       |
+     """.stripMargin
 
 }
