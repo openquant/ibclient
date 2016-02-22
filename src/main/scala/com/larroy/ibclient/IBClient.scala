@@ -641,12 +641,12 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
           // Other failure, partial results, the first must have succeeded, we return some results
           case Some(Failure(error)) ⇒ {
-            log.error(s"historicalData request failure (there were successful ones): ${request}")
+            log.error(s"historicalData request FAILURE for ${request}")
           }
 
           // Success
           case Some(Success(bars)) ⇒ {
-            log.info(s"historicalData request successful: ${request}")
+            log.info(s"historicalData request SUCCESSFUL, got ${bars.length} for ${request}")
             cumResult ++= bars
           }
         }

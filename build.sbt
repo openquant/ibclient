@@ -22,7 +22,8 @@ libraryDependencies ++= {
     "io.reactivex" %% "rxscala" % "0.26.+",
     "com.google.guava" % "guava" % "18.0",
     "joda-time" % "joda-time" % "2.9.1",
-    "org.joda" % "joda-convert" % "1.2"
+    "org.joda" % "joda-convert" % "1.2",
+    "org.scala-lang" % "scala-reflect" % "2.11.7"
   )
 }
 

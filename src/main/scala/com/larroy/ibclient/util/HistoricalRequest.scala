@@ -16,5 +16,10 @@ case class HistoricalRequest(contract: String, exchange: String, endDate: Date, 
       (that.contract, that.exchange, that.endDate, that.duration, that.durationUnit, that.barSize)
     )
   }
+
+
+
+
+
 }
 
