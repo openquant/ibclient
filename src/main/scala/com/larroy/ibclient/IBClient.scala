@@ -690,51 +690,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
     historicalExecutionContext.execute(historyRequestAggregation)
     resultPromise.future
-
-    /*
-    def throttledRequest(endDate: Date, duration: Int): Future[IndexedSeq[Bar]] = {
-      val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, durationUnit, barSize, duration)
-      def doRequest = {
-        val res = historicalData(contract, endDate, duration, durationUnit, barSize, whatToShow, rthOnly, false)
-        historicalRateLimiter.requested(request)
-        res
-      }
-
-      val nextAfter_ms = historicalRateLimiter.nextRequestAfter_ms(request)
-      if (nextAfter_ms > 0) {
-        log.debug(s"historicalData (deferring ${nextAfter_ms} ms) ${contract.symbol} ${duration} ${durationUnit} barSize: ${barSize}")
-        util.defer(nextAfter_ms) {
-          log.debug(s"historicalData (deferred ${nextAfter_ms} ms) ${contract.symbol} ${duration} ${durationUnit} barSize: ${barSize}")
-          doRequest
-        }(ctx).flatMap(identity)
-      } else {
-        log.debug(s"historicalData ${contract.symbol} ${duration} ${durationUnit} barSize: ${barSize}")
-        doRequest
-      }
-    }
-
-    val partialResults = ArrayBuffer.empty[Future[IndexedSeq[Bar]]]
-   .foreach { dateDuration ⇒
-      partialResults.foreach { partialResult ⇒
-        println(s"${partialResult}")
-        if (partialResult.isCompleted) {
-          partialResult.value match {
-            case Some(Failure(e)) ⇒ {
-              log.error("Request failed!")
-              return Promise[mutable.IndexedSeq[Bar]].failure(e).future
-            }
-            case _ ⇒
-          }
-
-        }
-      }
-      partialResults += throttledRequest(dateDuration._1, dateDuration._2)
-    }
-    historicalRateLimiter.cleanup()
-
-    val result = Future.sequence(partialResults).map { x ⇒ x.flatMap(identity) }
-    result
-    */
   }
 
 
