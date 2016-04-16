@@ -483,7 +483,6 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   /**
    * Request info about positions @see [[Position]]
- *
    * @return future of positions
    */
   def positions(): Future[IndexedSeq[Position]] = synchronized {
@@ -514,8 +513,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* contract details ********************************************************************************/
 
   /**
-   * Get [[ib.client.ContractDetails]] for the given contract
- *
+   * Get [[ContractDetails]] for the given contract
    * @param contract
    * @return contract details for the given contract
    */
