@@ -1,23 +1,30 @@
 package com.larroy.ibclient
 
+import java.time.{LocalDate, ZoneId, ZoneOffset, ZonedDateTime}
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
 
 import org.joda.time.format.DateTimeFormat
 
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
-import scala.util.{Failure, Try, Success}
+import scala.util.{Failure, Success, Try}
 import org.slf4j.{Logger, LoggerFactory}
 
 /**
  * @author piotr 03.03.15
  */
 package object util {
-  private val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMdd")
+  //private val dateTimeFormat = DateTimeFormat.forPattern("yyyyMMdd")
+  private val dateFormatter = DateTimeFormatter.ofPattern("yyyyMMdd").withZone(ZoneOffset.UTC)
   def dateEpoch_s(date: String): Long = {
-    if (date.length() == 8)
-      dateTimeFormat.parseDateTime(date).toDate.getTime / 1000
-    else
+    if (date.length() == 8) {
+      // http://stackoverflow.com/questions/23596530/unable-to-obtain-zoneddatetime-from-temporalaccessor-using-datetimeformatter-and
+      val zonedDateTime = LocalDate.parse(date, dateFormatter)
+      val x = zonedDateTime.atStartOfDay(ZoneOffset.UTC)
+      x.toEpochSecond
+      //dateTimeFormat.parseDateTime(date).toDate.getTime / 1000
+    } else
       date.toLong
   }
 
