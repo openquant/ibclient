@@ -11,6 +11,7 @@ import com.larroy.ibclient.contract.{CashContract, FutureContract, GenericContra
 import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.DateTimeFormat
 import org.slf4j.{Logger, LoggerFactory}
+
 //import rx.schedulers.Schedulers
 
 import scala.concurrent.Await
@@ -39,13 +40,13 @@ sealed case class Options(
   historyBarSize: BarSize = BarSize._1_min,
   historyStartDate: Date = new DateTime(DateTimeZone.UTC).minusDays(1).toDate,
   historyEndDate: Date = new DateTime(DateTimeZone.UTC).minusMinutes(1).toDate,
-  historyOutFile: String = "history.csv"
+  historyOutFile: Option[String] = None
 )
 
 //historyEndDate: Option[String] = Some(DateTimeFormat.forPattern("yyyyMMdd HH:mm:ss z").print(new DateTime(DateTimeZone.UTC)))
 /**
- * @author piotr 19.10.14
- */
+  * @author piotr 19.10.14
+  */
 object Main {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
   private val version = "0.1"
@@ -102,7 +103,7 @@ object Main {
         },
         opt[String]('a', "startdate") text ("startdate") action {
           (arg, dest) => dest.copy(historyStartDate = dateTimeFormat.parseDateTime(arg).toDate)
-        } validate {x ⇒
+        } validate { x ⇒
           x match {
             case validDateRe(_*) ⇒ success
             case _ ⇒ failure(s"argument doesn't match ${validDateRe.toString}")
@@ -112,7 +113,7 @@ object Main {
 
         opt[String]('z', "enddate") text ("enddate") action {
           (arg, dest) => dest.copy(historyEndDate = dateTimeFormat.parseDateTime(arg).toDate)
-        } validate {x ⇒
+        } validate { x ⇒
           x match {
             case validDateRe(_*) ⇒ success
             case _ ⇒ failure(s"argument doesn't match ${validDateRe.toString}")
@@ -125,10 +126,10 @@ object Main {
         note(s"duration unit is one of: '${barSizes.mkString(" ")}'"),
 
         opt[String]('o', "out") text ("output file") action {
-          (arg, dest) => dest.copy(historyOutFile = arg)
+          (arg, dest) => dest.copy(historyOutFile = Some(arg))
         },
         note(s"")
-      )
+        )
     }
   }
 
@@ -171,8 +172,6 @@ object Main {
   }
 
   def history(options: Options): Unit = {
-    val outFile = new File(options.historyOutFile)
-    require(! outFile.exists(), s"Output file ${outFile.getAbsolutePath} already exists")
 
     val ibclient = new IBClient(options.host, options.port, options.clientId)
     log.info(s"Connecting to ${options.host}:${options.port} with client id: ${options.clientId}")
@@ -183,9 +182,18 @@ object Main {
         options.contractCurrency
       )
       case SecType.CASH ⇒ new CashContract(options.contract, options.localSymbol.get, options.contractExchange, options.contractCurrency)
-      case other@_ => new GenericContract(other,options.contract, options.contractExchange, options.contractCurrency )
+      case other@_ => new GenericContract(other, options.contract, options.contractExchange, options.contractCurrency)
     }
 
+    def fileName(): String = {
+      if (contract.expiry() != null)
+        s"${contract.symbol}${contract.expiry}-${contract.exchange}-${options.historyBarSize.toString}.csv"
+      else
+        s"${contract.symbol}-${contract.exchange}-${options.historyBarSize.toString}.csv"
+    }
+
+    val outFile = new File(options.historyOutFile.getOrElse(fileName()))
+    require(!outFile.exists(), s"Output file ${outFile.getAbsolutePath} already exists")
     /*
     val futureContractDetails = ibclient.contractDetails(contract)
     val cd = Await.result(futureContractDetails, Duration.Inf)
