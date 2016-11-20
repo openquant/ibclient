@@ -6,9 +6,9 @@ import java.util.Date
 
 import com.github.tototoshi.csv.CSVWriter
 import com.ib.client.Contract
-import com.ib.client.Types.{WhatToShow, BarSize, DurationUnit, SecType}
-import com.larroy.ibclient.contract.{CashContract, FutureContract, StockContract}
-import org.joda.time.{DateTimeZone, DateTime}
+import com.ib.client.Types.{BarSize, DurationUnit, SecType, WhatToShow}
+import com.larroy.ibclient.contract.{CashContract, FutureContract, GenericContract, StockContract}
+import org.joda.time.{DateTime, DateTimeZone}
 import org.joda.time.format.DateTimeFormat
 import org.slf4j.{Logger, LoggerFactory}
 //import rx.schedulers.Schedulers
@@ -183,7 +183,7 @@ object Main {
         options.contractCurrency
       )
       case SecType.CASH ⇒ new CashContract(options.contract, options.localSymbol.get, options.contractExchange, options.contractCurrency)
-      case _ => throw new RuntimeException(s"unsupported contract type ${options.contractType}")
+      case other@_ => new GenericContract(other,options.contract, options.contractExchange, options.contractCurrency )
     }
 
     /*

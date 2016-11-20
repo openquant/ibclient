@@ -26,10 +26,7 @@ package object ibclient {
        |        currency = "USD"
        |      }
        |    }
-       |    historyRequestTimeout {
-       |        length = 2
-       |        unit = "min"
-       |    }
+       |    historyRequestTimeout = "2 min"
        |    historyRequestPacingViolationRetry {
        |        length = 60
        |        unit = "s"

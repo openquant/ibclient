@@ -48,3 +48,7 @@ Future contract identified by expiry date 2015
 
 history -c CL -t FUT -e NYMEX -x USD  -y 20150421 -a "20150128 15:00:00" -z "20150415 15:00:00"  -b
 _1_min -o cl.csv 
+
+
+
+history -c VIX -e CBOE -t IND -a "20161001 00:00:00" -o vix.csv -b _1_day

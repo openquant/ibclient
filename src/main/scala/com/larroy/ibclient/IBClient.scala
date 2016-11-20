@@ -1,27 +1,29 @@
 package com.larroy.ibclient
 
 import java.util.concurrent.Executors
-import java.util.{Collections, Date, ArrayList}
+import java.util.{ArrayList, Collections, Date}
 
 import com.ib.client.Types._
 import com.ib.client.{Order ⇒ IBOrder, _}
 import com.larroy.ibclient
-import com.larroy.ibclient.account.{Value, AccountUpdate, AccountUpdateSubscription}
+import com.larroy.ibclient.account.{AccountUpdate, AccountUpdateSubscription, Value}
 import com.larroy.ibclient.handler._
 import com.larroy.ibclient.order.{ExecutionStatus, Order}
-import com.larroy.ibclient.util.{CaseClassBeautifier, HistoricalRequest, HistoricalRateLimiter, HistoryLimits}
+import com.larroy.ibclient.util._
 import org.joda.time.format.DateTimeFormat
-import org.joda.time.{DateTimeZone, DateTime}
+import org.joda.time.{DateTime, DateTimeZone}
 import com.typesafe.config.ConfigFactory
 import net.ceedubs.ficus.Ficus._
-
 import org.slf4j.{Logger, LoggerFactory}
 import rx.lang.scala.Observable
 import rx.lang.scala.subjects.PublishSubject
+
 import scala.collection.mutable
 import scala.concurrent.duration._
-import scala.concurrent.{Await, ExecutionContext, Promise, Future}
-import scala.util.{Try, Success, Failure}
+import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.util.{Failure, Success, Try}
+
+
 
 /**
  * The API is fully asynchronous and thread safe.
@@ -49,6 +51,7 @@ import scala.util.{Try, Success, Failure}
  * @param port port configured in TWS API settings
  * @param clientId an integer to identify this client, a duplicated clientId will cause an error on connect
  */
+// scalastyle:off
 class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrapper {
   private val log: Logger = LoggerFactory.getLogger(this.getClass)
   private val cfg = ConfigFactory.load()
@@ -619,13 +622,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
       resultPromise.failure(new IBApiError("easyHistoricalData: startDate must be before endDate"))
       return resultPromise.future
     }
-    val historyDuration = HistoryLimits.bestDuration(startDate, endDate, barSize)
+    val historyDuration: HistoryDuration = HistoryLimits.bestDuration(startDate, endDate, barSize)
     case class PacingViolationRetryLimitException() extends Exception()
     val historyRequestAggregation = new Runnable {
       val cumResult = mutable.Queue.empty[Bar]
       def doRequest(request: HistoricalRequest): Unit = {
         val barsFuture = historicalData(contract, request.endDate, request.duration, historyDuration.durationUnit, barSize, whatToShow, rthOnly, false)
-        Await.ready(barsFuture, Duration(cfg.as[Int]("historyRequestTimeout.length"), cfg.as[String]("historyRequestTimeout.unit")))
+        Await.ready(barsFuture, Duration(cfg.as[String]("historyRequestTimeout")))
         barsFuture.value match {
           // Promise not completed, timeout
           case None ⇒ {
@@ -670,7 +673,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
         case _ ⇒ true
       }
       def run(): Unit = {
-        val endDatesDurations = historyDuration.endDates(endDate).zip(historyDuration.durations)
+        val endDatesDurations: Vector[(Date, Int)] = historyDuration.endDates(endDate).zip(historyDuration.durations)
         log.debug(s"easyHistoricalData, durations: ${endDatesDurations}")
         endDatesDurations.reverseIterator.foreach { dateDuration ⇒
           val endDate = dateDuration._1
@@ -729,7 +732,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     val request = new HistoricalRequest(contract.symbol, contract.exchange, endDate, duration, durationUnit, barSize)
 
     def doRequest = {
-      log.debug(s"reqHistoricalData reqId: ${reqId} endDate: ${dateStr} symbol: ${contract.symbol} duration: ${duration} barSize: ${barSize}")
+      log.debug(s"reqHistoricalData reqId: ${reqId} endDate: ${dateStr} symbol: ${contract.symbol} duration: ${duration}x${durationUnit.toString} barSize: ${barSize}")
       eClientSocket.reqHistoricalData(reqId, contract, dateStr, durationStr, barSize.toString, whatToShow.toString,
         if (rthOnly) 1 else 0, 2, Collections.emptyList[TagValue])
     }
@@ -892,3 +895,4 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
 
   protected override def verifyMessageAPI(apiData: String): Unit = {}
 }
+// scalastyle:on
