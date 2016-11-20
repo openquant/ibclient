@@ -52,3 +52,7 @@ _1_min -o cl.csv
 
 
 history -c VIX -e CBOE -t IND -a "20161001 00:00:00" -o vix.csv -b _1_day
+
+
+java -jar target/scala-2.11/ibclient-assembly-0.2.2-SNAPSHOT.jar history -c VIX -e CBOE -t IND -a
+"20161115 00:00:00" -z "201118 00:00:00" -o vix.csv -b _1_day
