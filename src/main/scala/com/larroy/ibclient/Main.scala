@@ -205,6 +205,7 @@ object Main {
     )
     val hist = Await.result(res, Duration.Inf)
     val csvWriter = CSVWriter.open(outFile)
+    csvWriter.writeRow(Vector("time", "high", "low", "open", "close", "volume", "trades", "gaps"))
     hist.foreach { bar ⇒
       csvWriter.writeRow(List(bar.time, bar.high, bar.low, bar.open, bar.close, bar.volume, bar.count, bar.hasGaps))
     }
