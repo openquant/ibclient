@@ -18,7 +18,7 @@ libraryDependencies ++= {
     "org.slf4j" % "jcl-over-slf4j" % "1.7.+",
     "com.github.tototoshi" %% "scala-csv" % "1.+",
     "com.typesafe" % "config" % "1.3.+",
-    "com.iheart" %% "ficus" % "1.2.3",
+    "com.iheart" %% "ficus" % "1.4.3",
     "io.reactivex" %% "rxscala" % "0.26.+",
     "com.google.guava" % "guava" % "18.0",
     "joda-time" % "joda-time" % "2.9.1",
