@@ -60,7 +60,7 @@ object Main {
     new scopt.OptionParser[Options]("ibclient") {
       head("ibclient", Main.version)
 
-      override def showUsageOnError: Boolean = true
+      override def showUsageOnError: Option[Boolean] = Some(true)
 
       help("help") text ("print help")
       /*
@@ -145,7 +145,7 @@ object Main {
     val success: Boolean = try options.mode match {
       case Mode.Invalid => {
         optionParser.reportError("Please specify a valid command")
-        optionParser.showUsage
+        println(optionParser.usage)
         false
       }
       case Mode.History => {
