@@ -4,7 +4,7 @@ version := "0.2.2-SNAPSHOT"
 
 organization := "com.larroy"
 
-scalaVersion := "2.11.8"
+scalaVersion := "2.11.12"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-feature", "-encoding", "utf8")
 
@@ -21,7 +21,7 @@ libraryDependencies ++= {
     "com.google.guava" % "guava" % "18.0",
     "joda-time" % "joda-time" % "2.9.1",
     "org.joda" % "joda-convert" % "1.2",
-    "org.scala-lang" % "scala-reflect" % "2.11.8"
+    "org.scala-lang" % "scala-reflect" % scalaVersion.value
   )
 }
 
