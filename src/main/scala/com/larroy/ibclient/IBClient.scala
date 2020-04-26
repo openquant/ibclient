@@ -32,6 +32,9 @@ import scala.util.{Failure, Success, Try}
  *
  * All the exposed interface is nonblocking, some calls return a [[scala.concurrent.Future]] or [[rx.lang.scala.Observable]]
  *
+ * For documentation details, see the EWrapper Interface functions which this class wraps:
+ * https://interactivebrokers.github.io/tws-api/interfaceIBApi_1_1EWrapper.html
+ *
  * Example, get realtime bars for EUR.USD:
  * {{{
  * import scala.concurrent.Await
@@ -307,6 +310,13 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
     }
   }
 
+  /**
+   * See also https://interactivebrokers.github.io/tws-api/md_receive.html
+   * @param tickerId
+   * @param field See https://interactivebrokers.github.io/tws-api/tick_types.html
+   * @param price
+   * @param canAutoExecute
+   */
   protected override def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int): Unit = synchronized {
     log.debug(s"tickPrice ${tickerId} ${field} ${price}")
     var handled = false
@@ -516,7 +526,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
   /* contract details ********************************************************************************/
 
   /**
-   * Get [[ContractDetails]] for the given contract
+   * Get [[com.ib.client.ContractDetails]] for the given contract
    * @param contract
    * @return contract details for the given contract
    */
@@ -823,7 +833,7 @@ class IBClient(val host: String, val port: Int, val clientId: Int) extends EWrap
    * @return a [[RealtimeBarsSubscription]] which has an observableBar to which you can subscribe to
    * {{{
    * val subscription = ibclient.realtimeBars(new CashContract("EUR","EUR.USD"), WhatToShow.MIDPOINT)
-   * subscription.observableBar.subscribe({bar=>println(s"got bar ${bar}")}, {error ⇒ throw (error)})
+   * subscription.observableBar.subscribe({bar=>println(bar)}, {error ⇒ throw (error)})
    * }}}
    */
   def realtimeBars(contract: Contract, whatToShow: WhatToShow = WhatToShow.MIDPOINT, rthOnly: Boolean = false):

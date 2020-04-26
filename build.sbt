@@ -34,3 +34,11 @@ testOptions in Test += Tests.Argument(TestFrameworks.Specs2, "console", "junitxm
 parallelExecution in Test := false
 
 test in assembly := {}
+
+val exclude = Set("ApiConnection.java", "ApiController.java")
+sources in (Compile, doc)  ~= ((old: Seq[File]) => {
+  old.filter{ x: sbt.File =>
+    println(x.getName)
+    ! exclude.contains(x.getName)
+}})
+
