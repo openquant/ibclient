@@ -1,4 +1,6 @@
 name := "ibclient"
+enablePlugins(PackPlugin)
+
 
 version := "0.2.2-SNAPSHOT"
 
