@@ -27,6 +27,15 @@ java -jar target/scala-2.12/ibclient-assembly-0.2.2-SNAPSHOT.jar
 Or a binary executable with `sbt pack`, and run with `target/pack/bin/main`
 
 
+## Connect to IB
+
+To connect to ib you can use IBC, I would recommend my docker version of IBC:
+
+check out here how to use it:
+
+https://github.com/larroy/IBC/blob/docker/docker/README.md
+
+
 ## Examples
 
 The client connects asynchronously so to wait until it's connected we can do the following:
